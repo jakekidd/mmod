@@ -1,0 +1,15 @@
+{
+  "name": "mmod",
+  "version": "1.0.0",
+  "description": "A monorepo of applications used for a decentralized method of observing and identifying micrometeroids and orbital debris (MMOD) in low earth orbit (LEO).",
+  "main": "index.js",
+  "author": "jakekidd",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "packages/kepler"
+  ],
+  "scripts": {
+    "version:all": "yarn workspaces foreach run version $0 && yarn run version $0"
+  }
+}
