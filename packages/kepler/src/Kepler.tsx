@@ -2,26 +2,44 @@ import React, { useEffect } from "react";
 import logo from "./logo.svg";
 import "./Kepler.css";
 import * as THREE from "three";
-import { GUI } from "three/addons/libs/lil-gui.module.min.js";
+import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
+const GUI_PARAMS = {
+  showHelpers: true,
+  alphaToCoverage: true,
+};
+
 function Kepler() {
+  // Main components of the three.js nested web GL process.
   let renderer: THREE.WebGLRenderer;
   let scene: THREE.Scene;
   let camera: THREE.PerspectiveCamera;
+  // Whether or not the three.js canvas renderer and scene have been initialized.
+  // Note that we do not use state here, as we just want to prevent redundant init
+  // calls in useEffect.
+  let initialized = false;
 
-  useEffect(() => {}, []);
+  useEffect(init, []);
 
-  const init = function (): void {
-    // Set up the three.js WebGLRenderer
+  function init(): void {
+    // Check whether initialized.
+    if (initialized) {
+      return;
+    }
+    initialized = true;
+
+    // Init the three.js WebGLRenderer, which will draw the scene on the canvas.
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.localClippingEnabled = true;
     document.body.appendChild(renderer.domElement);
 
+    // Init scene, which holds objects for rendering.
     scene = new THREE.Scene();
 
+    // Init camera
     camera = new THREE.PerspectiveCamera(
       40,
       window.innerWidth / window.innerHeight,
@@ -61,19 +79,34 @@ function Kepler() {
     }
 
     scene.add(group);
-  };
 
-  const onWindowResize = function (): void {
+    const gui = new GUI();
+
+    gui.add(GUI_PARAMS, "alphaToCoverage").onChange(function (value) {
+      group.children.forEach((c) => {
+        const mesh = c as any;
+        mesh.material.alphaToCoverage = Boolean(value);
+        mesh.material.needsUpdate = true;
+      });
+
+      render();
+    });
+
+    // Add a window event listener that will fire when the browser window is resized.
+    window.addEventListener("resize", onWindowResize);
+  }
+
+  function onWindowResize(): void {
     // Set the ratio of the camera's aspect to match the browser window size.
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     render();
-  };
+  }
 
-  const render = function (): void {
+  function render(): void {
     renderer.render(scene, camera);
-  };
+  }
 
   return <div className="kepler"></div>;
 }
