@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
-import logo from "./logo.svg";
 import "./Kepler.css";
 import * as THREE from "three";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { MMOD } from "./helpers/MMOD";
+import { EARTH_RADIUS } from "./helpers/Constants";
 
 const GUI_PARAMS = {
   showHelpers: true,
@@ -11,6 +12,8 @@ const GUI_PARAMS = {
 };
 
 function Kepler() {
+  // TODO: Move to state?
+
   // Main components of the three.js nested web GL process.
   let renderer: THREE.WebGLRenderer;
   let scene: THREE.Scene;
@@ -19,6 +22,7 @@ function Kepler() {
   // Note that we do not use state here, as we just want to prevent redundant init
   // calls in useEffect.
   let initialized = false;
+  const mmods: MMOD[] = [];
 
   useEffect(init, []);
 
@@ -59,34 +63,38 @@ function Kepler() {
     light.position.set(-1.25, 1, 1.25);
     scene.add(light);
 
-    const group = new THREE.Group();
+    // Create an earth sphere around which our MMODs will be orbit.
+    // TODO: Add a transparent slightly larger sphere to illustrate the range of LEO.
+    const earthGroup = new THREE.Group();
+    const earthGeometry = new THREE.SphereGeometry(EARTH_RADIUS, 48, 24);
+    const earthMaterial = new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(
+        Math.random(),
+        0.5,
+        0.5,
+        THREE.SRGBColorSpace
+      ),
+      side: THREE.DoubleSide,
+      alphaToCoverage: true,
+    });
+    earthGroup.add(new THREE.Mesh(earthGeometry, earthMaterial));
+    // Add the earth group to the scene.
+    scene.add(earthGroup);
 
-    for (let i = 1; i <= 30; i += 2) {
-      const geometry = new THREE.SphereGeometry(i / 30, 48, 24);
-
-      const material = new THREE.MeshPhongMaterial({
-        color: new THREE.Color().setHSL(
-          Math.random(),
-          0.5,
-          0.5,
-          THREE.SRGBColorSpace
-        ),
-        side: THREE.DoubleSide,
-        alphaToCoverage: true,
-      });
-
-      group.add(new THREE.Mesh(geometry, material));
+    // Init the MMOD meshes, small object points that will be orbiting the
+    // earth sphere.
+    for (let i = 0; i < 500; i++) {
+      const mmod = new MMOD();
+      scene.add(mmod.mesh);
+      mmods.push(mmod);
     }
 
-    scene.add(group);
-
+    // Init and set up the mini GUI
     const gui = new GUI();
-
     gui.add(GUI_PARAMS, "alphaToCoverage").onChange(function (value) {
-      group.children.forEach((c) => {
-        const mesh = c as any;
-        mesh.material.alphaToCoverage = Boolean(value);
-        mesh.material.needsUpdate = true;
+      earthGroup.children.forEach((c: any) => {
+        c.material.alphaToCoverage = Boolean(value);
+        c.material.needsUpdate = true;
       });
 
       render();
