@@ -8,14 +8,9 @@ export class MMOD {
    * A small point object representing orbiting debris.
    */
   constructor() {
-    const geometry = new THREE.SphereGeometry(1, 4, 2);
+    const geometry = new THREE.SphereGeometry(1, 1, 1);
     const material = new THREE.MeshPhongMaterial({
-      color: new THREE.Color().setHSL(
-        Math.random(),
-        0.5,
-        0.5,
-        THREE.SRGBColorSpace
-      ),
+      color: new THREE.Color().setHSL(0.9, 0.9, 0.9, THREE.SRGBColorSpace),
       side: THREE.DoubleSide,
       alphaToCoverage: true,
     });
@@ -25,8 +20,8 @@ export class MMOD {
     // spherical coordinates, theta and phi with 0 < theta < 2pi and
     // 0 < phi < pi.
     // Generate random values for theta and phi.
-    const theta = this.random(0, 2 * Math.PI);
-    const phi = this.random(0, Math.PI);
+    const theta = this.random(0.01, 2 * Math.PI);
+    const phi = this.random(0.01, Math.PI);
     // Convert theta and phi into cartesian coordinates for the mesh.
     this.mesh.position.x = LEO_RADIUS * Math.cos(theta) * Math.sin(phi);
     this.mesh.position.y = LEO_RADIUS * Math.sin(theta) * Math.sin(phi);

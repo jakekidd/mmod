@@ -51,16 +51,20 @@ function Kepler() {
       200
     );
 
-    camera.position.set(-1.5, 2.5, 3.0);
+    camera.position.set(
+      -EARTH_RADIUS - 50,
+      EARTH_RADIUS + 50,
+      EARTH_RADIUS + 50
+    );
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.addEventListener("change", render); // use only if there is no animation loop
-    controls.minDistance = 1;
-    controls.maxDistance = 10;
+    controls.minDistance = EARTH_RADIUS + 3;
+    controls.maxDistance = EARTH_RADIUS + 10;
     controls.enablePan = false;
 
     const light = new THREE.HemisphereLight(0xffffff, 0x080808, 4.5);
-    light.position.set(-1.25, 1, 1.25);
+    light.position.set(-4, 1, 1.25);
     scene.add(light);
 
     // Create an earth sphere around which our MMODs will be orbit.
@@ -68,12 +72,7 @@ function Kepler() {
     const earthGroup = new THREE.Group();
     const earthGeometry = new THREE.SphereGeometry(EARTH_RADIUS, 48, 24);
     const earthMaterial = new THREE.MeshPhongMaterial({
-      color: new THREE.Color().setHSL(
-        Math.random(),
-        0.5,
-        0.5,
-        THREE.SRGBColorSpace
-      ),
+      color: new THREE.Color().setHSL(0.8, 0.5, 0.5, THREE.SRGBColorSpace),
       side: THREE.DoubleSide,
       alphaToCoverage: true,
     });
