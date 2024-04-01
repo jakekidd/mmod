@@ -43,9 +43,15 @@ export class MMOD {
   // Revolution number (typically at a given epoch) is just
   // a counter, again normally tracked by
   // This will not be tracked here.
-  public revolution = 0;
+  public revolution = 1;
   // Will leave this at unclassified for now.
   public classification: "U" | "C" | "S" = "U";
+
+  // Variables used to calculate the ballistic coefficient.
+  public mass: number; // In grams.
+  public diameter: number; // In meters.
+  public drag = 0.47; // Drag coefficient of a sphere.
+  public density = 7850.0;
 
   /**
    * A small point object representing orbiting debris.
@@ -95,6 +101,10 @@ export class MMOD {
 
     // Set longitude at random.
     this.longitude = this.random(200, 300);
+
+    // Set mass, diameter at random.
+    this.mass = this.random(200, 500);
+    this.diameter = this.random(0.1, 0.3);
   }
 
   /**
@@ -106,17 +116,21 @@ export class MMOD {
   public tle(timestamp: Date): TLE {
     const tle = [Array(69).fill("\xa0"), Array(69).fill("\xa0")];
 
+    /// LINE 1
+    // Line number.
     tle[0].splice(0, 1, "1");
 
-    const catalogNum = this.satelliteCatalogNumber.toString();
-    tle[0].splice(2, catalogNum.length, ...catalogNum.split(""));
+    // TODO: Check if this should be 0-padded.
+    // Satellite catalog number. This is space junk, so probably zero.
+    tle[0].splice(2, 5, ...this.pad(this.satelliteCatalogNumber, 5).split(""));
 
+    // Append classification.
     tle[0].splice(7, 1, this.classification);
 
-    // International designator, the launch year etc., not relevant.
+    // Append international designator, the launch year etc., not relevant.
     tle[0].splice(9, 6, "0", "0", "0", "0", "0", "A");
 
-    // Add epoch to the first line.
+    // Append epoch to the first line.
     // Epoch year, the last two digits of year.
     tle[0].splice(
       18,
@@ -125,7 +139,124 @@ export class MMOD {
     );
     // Epoch day of the year and fractional portion of the day.
     const day = this.pad(this.getDayOfYear(timestamp), 3);
-    tle[0].splice(20, 12);
+    const fraction = this.getFractionalPortionOfDay(timestamp)
+      .toString()
+      .substring(1, 10); // Removes 0 from beginning and truncates.
+    tle[0].splice(20, 12, ...(day + fraction).split(""));
+
+    // TODO: Should be first derivative of mean motion?
+    // Append ballistic coefficient.
+    tle[0].splice(
+      33,
+      10,
+      "-",
+      ...this.getBallisticCoefficient().toString().substring(1, 9).split("")
+    );
+    // TODO: Append second derivative of mean motion.
+    // Leaving at 0 for now.
+    tle[0].splice(44, 8, "\xa0", "0", "0", "0", "0", "0", "-", "0");
+
+    // TODO: Am I doing this right?
+    // Append BSTAR.
+    const BSTAR = this.getBSTAR();
+    let BSTARString = BSTAR.toString().substring(
+      BSTAR < 0 ? 3 : 2,
+      BSTAR < 0 ? 8 : 7
+    );
+    BSTARString = BSTARString.substring(0, 5) + "-" + BSTARString.substring(6);
+    tle[0].splice(53, 7, "-", ...BSTARString.split(""));
+
+    // Append ephemeris type. Supposedly always zero.
+    tle[0].splice(62, 1, "0");
+
+    // TODO: Is there any reason to actually track this?
+    // Element set number, incremented when a new TLE is generated for this object. Will leave at 1.
+    tle[0].splice(64, 3, "001");
+
+    // TODO: How to do this? Encode first, or..?
+    // Calculate and append the checksum.
+    tle[0].splice(68, 1, "0");
+
+    /// LINE 2
+    // Line number.
+    tle[1].splice(0, 1, "2");
+
+    // Again, satellite catalog number.
+    tle[1].splice(2, 5, ...this.pad(this.satelliteCatalogNumber, 5).split(""));
+
+    // Append inclination.
+    tle[1].splice(
+      8,
+      6,
+      ...this.pad(this.inclination, 7, true).substring(0, 7).split("")
+    );
+
+    // Append longitude.
+    tle[1].splice(
+      17,
+      8,
+      ...this.pad(this.longitude, 8, true).substring(0, 8).split("")
+    );
+
+    // Append eccentricity.
+    tle[1].splice(
+      26,
+      7,
+      ...this.eccentricity.toString().substring(2, 10).split("")
+    );
+
+    // Append argument of perigee.
+    tle[1].splice(
+      34,
+      8,
+      ...this.pad(this.perigee, 8, true).substring(0, 8).split("")
+    );
+
+    // Append mean anomaly.
+    tle[1].splice(
+      43,
+      8,
+      ...this.pad(this.anomaly, 8, true).substring(0, 8).split("")
+    );
+
+    // Append mean motion.
+    let extendedMotion = this.pad(
+      this.motion,
+      this.motion >= 10 ? 11 : 10,
+      true
+    );
+    if (this.motion <= 10) {
+      extendedMotion = this.pad(parseInt(extendedMotion), 11);
+    }
+    tle[1].splice(52, 11, ...extendedMotion.substring(0, 12).split(""));
+
+    // Append revolution number.
+    tle[1].splice(63, 5, ...this.pad(this.revolution, 5).split(""));
+
+    // TODO: How to do this? Encode first, or..?
+    // Calculate and append the checksum.
+    tle[1].splice(68, 1, "0");
+
+    return [tle[0].join(""), tle[1].join("")];
+  }
+
+  private getBSTAR(): number {
+    // TODO: Cross-sectional != frontal area.
+    // Should be expressed as spherical cap?
+    const B = (this.drag * this.getCrossSectionalArea()) / this.mass;
+    return (this.density * B) / 2;
+  }
+
+  private getBallisticCoefficient(): number {
+    return this.mass / (this.drag * this.getCrossSectionalArea());
+  }
+
+  private getCrossSectionalArea(): number {
+    return Math.PI * (this.diameter / 2) ** 2;
+  }
+
+  private getVolume(): number {
+    return (4 / 3) * Math.PI * Math.pow(this.diameter / 2, 3);
   }
 
   private getFractionalPortionOfDay(date: Date): number {
@@ -147,10 +278,10 @@ export class MMOD {
     return Math.floor(secondsIntoYear / 86400);
   }
 
-  private pad(num: number, size: number): string {
+  private pad(num: number, size: number, reverse: boolean = false): string {
     let s = num.toString();
     while (s.length < size) {
-      s = "0" + s;
+      s = reverse ? s + "0" : "0" + s;
     }
     return s;
   }
