@@ -1,4 +1,5 @@
-import { Point, Vector } from "./Point";
+import { Point } from "./Point";
+import { Vector } from "./Vector";
 
 export class Snapshot {
   private _set: Set<Point> = new Set<Point>();

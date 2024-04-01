@@ -52,15 +52,15 @@ function Kepler() {
     );
 
     camera.position.set(
-      -EARTH_RADIUS - 50,
-      EARTH_RADIUS + 50,
-      EARTH_RADIUS + 50
+      -EARTH_RADIUS - 10,
+      EARTH_RADIUS + 10,
+      EARTH_RADIUS + 10
     );
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.addEventListener("change", render); // use only if there is no animation loop
-    controls.minDistance = EARTH_RADIUS + 3;
-    controls.maxDistance = EARTH_RADIUS + 10;
+    controls.minDistance = EARTH_RADIUS + 10;
+    controls.maxDistance = EARTH_RADIUS + 18;
     controls.enablePan = false;
 
     const light = new THREE.HemisphereLight(0xffffff, 0x080808, 4.5);
@@ -101,6 +101,9 @@ function Kepler() {
 
     // Add a window event listener that will fire when the browser window is resized.
     window.addEventListener("resize", onWindowResize);
+
+    // Start the animation process.
+    animate();
   }
 
   function onWindowResize(): void {
@@ -113,6 +116,15 @@ function Kepler() {
 
   function render(): void {
     renderer.render(scene, camera);
+  }
+
+  function animate(): void {
+    requestAnimationFrame(animate);
+
+    for (const mmod of mmods) {
+    }
+
+    render();
   }
 
   return <div className="kepler"></div>;
