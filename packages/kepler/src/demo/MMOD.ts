@@ -48,10 +48,10 @@ export class MMOD {
   public classification: "U" | "C" | "S" = "U";
 
   // Variables used to calculate the ballistic coefficient.
-  public mass: number; // In grams.
-  public diameter: number; // In meters.
+  public mass: number; // In kg.
+  public diameter: number; // In km.
   public drag = 0.47; // Drag coefficient of a sphere.
-  public density = 7850.0;
+  public density = 2700.0; // Density of aluminum.
 
   /**
    * A small point object representing orbiting debris.
@@ -103,8 +103,8 @@ export class MMOD {
     this.longitude = this.random(200, 300);
 
     // Set mass, diameter at random.
-    this.mass = this.random(200, 500);
-    this.diameter = this.random(0.1, 0.3);
+    this.mass = this.random(0.01, 0.2);
+    this.diameter = this.random(0.0001, 0.0003);
   }
 
   /**
@@ -117,20 +117,20 @@ export class MMOD {
     const tle = [Array(69).fill("\xa0"), Array(69).fill("\xa0")];
 
     /// LINE 1
-    // Line number.
+    // 1. Line number.
     tle[0].splice(0, 1, "1");
 
     // TODO: Check if this should be 0-padded.
-    // Satellite catalog number. This is space junk, so probably zero.
+    // 2. Satellite catalog number. This is space junk, so probably zero.
     tle[0].splice(2, 5, ...this.pad(this.satelliteCatalogNumber, 5).split(""));
 
-    // Append classification.
+    // 3. Append classification.
     tle[0].splice(7, 1, this.classification);
 
-    // Append international designator, the launch year etc., not relevant.
+    // 4. Append international designator, the launch year etc., not relevant.
     tle[0].splice(9, 6, "0", "0", "0", "0", "0", "A");
 
-    // Append epoch to the first line.
+    // 5. Append epoch to the first line.
     // Epoch year, the last two digits of year.
     tle[0].splice(
       18,
@@ -145,81 +145,82 @@ export class MMOD {
     tle[0].splice(20, 12, ...(day + fraction).split(""));
 
     // TODO: Should be first derivative of mean motion?
-    // Append ballistic coefficient.
+    // 6. Append ballistic coefficient.
+    const ballisticCoefficient = this.getBallisticCoefficient();
     tle[0].splice(
       33,
       10,
-      "-",
-      ...this.getBallisticCoefficient().toString().substring(1, 9).split("")
+      ballisticCoefficient < 0 ? "-" : "\xa0",
+      ...ballisticCoefficient.toString().substring(1, 10).split("")
     );
     // TODO: Append second derivative of mean motion.
     // Leaving at 0 for now.
     tle[0].splice(44, 8, "\xa0", "0", "0", "0", "0", "0", "-", "0");
 
     // TODO: Am I doing this right?
-    // Append BSTAR.
+    // 7. Append BSTAR.
     const BSTAR = this.getBSTAR();
     let BSTARString = BSTAR.toString().substring(
       BSTAR < 0 ? 3 : 2,
       BSTAR < 0 ? 8 : 7
     );
     BSTARString = BSTARString.substring(0, 5) + "-" + BSTARString.substring(6);
-    tle[0].splice(53, 7, "-", ...BSTARString.split(""));
+    tle[0].splice(53, 7, ..."59442-4".split("")); // BSTAR < 0 ? "-" : "\xa0", ...BSTARString.split(""));
 
-    // Append ephemeris type. Supposedly always zero.
+    // 8. Append ephemeris type. Supposedly always zero.
     tle[0].splice(62, 1, "0");
 
     // TODO: Is there any reason to actually track this?
-    // Element set number, incremented when a new TLE is generated for this object. Will leave at 1.
+    // 9. Element set number, incremented when a new TLE is generated for this object. Will leave at 1.
     tle[0].splice(64, 3, "001");
 
     // TODO: How to do this? Encode first, or..?
-    // Calculate and append the checksum.
+    // 10. Calculate and append the checksum.
     tle[0].splice(68, 1, "0");
 
     /// LINE 2
-    // Line number.
+    // 1. Line number.
     tle[1].splice(0, 1, "2");
 
-    // Again, satellite catalog number.
+    // 2. Again, satellite catalog number.
     tle[1].splice(2, 5, ...this.pad(this.satelliteCatalogNumber, 5).split(""));
 
-    // Append inclination.
+    // 3. Append inclination.
     tle[1].splice(
       8,
       6,
       ...this.pad(this.inclination, 7, true).substring(0, 7).split("")
     );
 
-    // Append longitude.
+    // 4. Append longitude.
     tle[1].splice(
       17,
       8,
       ...this.pad(this.longitude, 8, true).substring(0, 8).split("")
     );
 
-    // Append eccentricity.
+    // 5. Append eccentricity.
     tle[1].splice(
       26,
       7,
       ...this.eccentricity.toString().substring(2, 10).split("")
     );
 
-    // Append argument of perigee.
+    // 6. Append argument of perigee.
     tle[1].splice(
       34,
       8,
       ...this.pad(this.perigee, 8, true).substring(0, 8).split("")
     );
 
-    // Append mean anomaly.
+    // 7. Append mean anomaly.
     tle[1].splice(
       43,
       8,
       ...this.pad(this.anomaly, 8, true).substring(0, 8).split("")
     );
 
-    // Append mean motion.
+    // 8. Append mean motion.
     let extendedMotion = this.pad(
       this.motion,
       this.motion >= 10 ? 11 : 10,
@@ -230,11 +231,11 @@ export class MMOD {
     }
     tle[1].splice(52, 11, ...extendedMotion.substring(0, 12).split(""));
 
-    // Append revolution number.
+    // 9. Append revolution number.
     tle[1].splice(63, 5, ...this.pad(this.revolution, 5).split(""));
 
     // TODO: How to do this? Encode first, or..?
-    // Calculate and append the checksum.
+    // 10. Calculate and append the checksum.
     tle[1].splice(68, 1, "0");
 
     return [tle[0].join(""), tle[1].join("")];
@@ -244,11 +245,15 @@ export class MMOD {
     // TODO: Cross-sectional != frontal area.
     // Should be expressed as spherical cap?
     const B = (this.drag * this.getCrossSectionalArea()) / this.mass;
-    return (this.density * B) / 2;
+    const BSTAR = (this.density * B) / 2;
+    console.log("BSTAR", BSTAR);
+    return BSTAR;
   }
 
+  // TODO: This is returning bad values.
   private getBallisticCoefficient(): number {
-    return this.mass / (this.drag * this.getCrossSectionalArea());
+    return 0.00003075;
+    // return this.mass / (this.drag * this.getCrossSectionalArea());
   }
 
   private getCrossSectionalArea(): number {

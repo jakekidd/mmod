@@ -12,6 +12,10 @@ const GUI_PARAMS = {
   alphaToCoverage: true,
 };
 
+// TODO: Make this a GUI variable.
+// Seconds that will elapse in sim time per animation frame.
+const SECONDS_PER_FRAME = 10;
+
 function Kepler() {
   // TODO: Move to state?
 
@@ -19,6 +23,8 @@ function Kepler() {
   let renderer: THREE.WebGLRenderer;
   let scene: THREE.Scene;
   let camera: THREE.PerspectiveCamera;
+  // Current sim time in UTC seconds. Used in the event we want to speed things up.
+  let time: number;
   // Whether or not the three.js canvas renderer and scene have been initialized.
   // Note that we do not use state here, as we just want to prevent redundant init
   // calls in useEffect.
@@ -63,6 +69,9 @@ function Kepler() {
       return;
     }
     initialized = true;
+
+    // Set initial UTC timestamp in seconds.
+    time = new Date().getUTCSeconds();
 
     // Init the three.js WebGLRenderer, which will draw the scene on the canvas.
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -135,6 +144,34 @@ function Kepler() {
 
     // Start the animation process.
     animate();
+
+    // TODO: REMOVE
+    const date = new Date();
+    date.setUTCSeconds(time);
+    const tle = mmods[0].tle(date);
+    console.log("MMOD TLE:", "\n", tle[0], "\n", tle[1]);
+
+    // const satrec = satellite.twoline2satrec(tle[0], tle[1]);
+    // console.log("MMOD SATREC:", satrec);
+
+    // // Get the position of the satellite at the given date
+    // date.setHours(date.getHours() + 4);
+    // const positionAndVelocity = satellite.propagate(satrec, date);
+    // if (typeof positionAndVelocity === "boolean") {
+    //   console.log("Is a boolean.", positionAndVelocity);
+    //   return;
+    // }
+    // const gmst = satellite.gstime(date);
+    // const position = satellite.eciToGeodetic(
+    //   positionAndVelocity.position as any,
+    //   gmst
+    // );
+
+    // console.log("Positional data:");
+    // console.log(position);
+    // console.log(position.longitude); // in radians
+    // console.log(position.latitude); // in radians
+    // console.log(position.height); // in km
   }
 
   function onWindowResize(): void {
@@ -150,9 +187,12 @@ function Kepler() {
   }
 
   function animate(): void {
+    time += SECONDS_PER_FRAME;
+
     requestAnimationFrame(animate);
 
     for (const mmod of mmods) {
+      // const MMOD_TLE = mmod.tle(new Date());
     }
 
     render();
