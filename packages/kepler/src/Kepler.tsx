@@ -4,8 +4,10 @@ import * as THREE from "three";
 import * as satellite from "satellite.js";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { MMOD } from "./demo/MMOD";
+import { MMOD } from "./scene/MMOD";
 import { EARTH_RADIUS } from "./helpers/Constants";
+import { Identifier } from "./scene/Identifier";
+import { Aggregator } from "./model/Aggregator";
 
 const GUI_PARAMS = {
   showHelpers: true,
@@ -29,11 +31,14 @@ function Kepler() {
   // Note that we do not use state here, as we just want to prevent redundant init
   // calls in useEffect.
   let initialized = false;
+
   const mmods: MMOD[] = [];
+  // Alice is an Identifier agent observing MMODs.
+  let alice: Identifier;
 
   useEffect(init, []);
 
-  useEffect(tleTest, []);
+  // useEffect(tleTest, []);
   function tleTest(): void {
     const ISS_TLE = [
       `1 25544U 98067A   19156.50900463  .00003075  00000-0  59442-4 0  9992`,
@@ -123,10 +128,12 @@ function Kepler() {
     // Init the MMOD meshes, small object points that will be orbiting the
     // earth sphere.
     for (let i = 0; i < 500; i++) {
-      const mmod = new MMOD();
-      scene.add(mmod.mesh);
+      const mmod = new MMOD(scene);
       mmods.push(mmod);
     }
+
+    // Init Alice, an Identifier.
+    alice = new Identifier(scene);
 
     // Init and set up the mini GUI
     const gui = new GUI();
@@ -146,10 +153,10 @@ function Kepler() {
     animate();
 
     // TODO: REMOVE
-    const date = new Date();
-    date.setUTCSeconds(time);
-    const tle = mmods[0].tle(date);
-    console.log("MMOD TLE:", "\n", tle[0], "\n", tle[1]);
+    // const date = new Date();
+    // date.setUTCSeconds(time);
+    // const tle = mmods[0].tle(date);
+    // console.log("MMOD TLE:", "\n", tle[0], "\n", tle[1]);
 
     // const satrec = satellite.twoline2satrec(tle[0], tle[1]);
     // console.log("MMOD SATREC:", satrec);
@@ -172,6 +179,9 @@ function Kepler() {
     // console.log(position.longitude); // in radians
     // console.log(position.latitude); // in radians
     // console.log(position.height); // in km
+
+    const aggregator = new Aggregator();
+    aggregator.example();
   }
 
   function onWindowResize(): void {
