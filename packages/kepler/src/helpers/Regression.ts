@@ -15,7 +15,9 @@ interface OrbitalElements {
   orbitalPeriod: number;
 }
 
-function linearRegressionOrbit(dataPoints: DataPoint[]): OrbitalElements {
+export function linearRegressionOrbit(
+  dataPoints: DataPoint[]
+): OrbitalElements {
   if (dataPoints.length < 3) {
     throw new Error("At least 3 data points are required.");
   }

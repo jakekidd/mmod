@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import "./Kepler.css";
 import * as THREE from "three";
-import * as satellite from "satellite.js";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { MMOD } from "./scene/MMOD";
@@ -16,7 +15,7 @@ const GUI_PARAMS = {
 
 // TODO: Make this a GUI variable.
 // Seconds that will elapse in sim time per animation frame.
-const SECONDS_PER_FRAME = 10;
+const SECONDS_PER_FRAME = 2000;
 
 function Kepler() {
   // TODO: Move to state?
@@ -40,32 +39,30 @@ function Kepler() {
 
   // useEffect(tleTest, []);
   function tleTest(): void {
-    const ISS_TLE = [
-      `1 25544U 98067A   19156.50900463  .00003075  00000-0  59442-4 0  9992`,
-      `2 25544  51.6433  59.2583 0008217  16.4489 347.6017 15.51174618173442`,
-    ];
-    const satrec = satellite.twoline2satrec(ISS_TLE[0], ISS_TLE[1]);
-    console.log("satrec", satrec);
-
-    // Get the position of the satellite at the given date
-    const date = new Date();
-    date.setHours(date.getHours() + 4);
-    const positionAndVelocity = satellite.propagate(satrec, date);
-    if (typeof positionAndVelocity === "boolean") {
-      console.log("Is a boolean.", positionAndVelocity);
-      return;
-    }
-    const gmst = satellite.gstime(date);
-    const position = satellite.eciToGeodetic(
-      positionAndVelocity.position as any,
-      gmst
-    );
-
-    console.log("Positional data:");
-    console.log(position);
-    console.log(position.longitude); // in radians
-    console.log(position.latitude); // in radians
-    console.log(position.height); // in km
+    // const ISS_TLE = [
+    //   `1 25544U 98067A   19156.50900463  .00003075  00000-0  59442-4 0  9992`,
+    //   `2 25544  51.6433  59.2583 0008217  16.4489 347.6017 15.51174618173442`,
+    // ];
+    // const satrec = satellite.twoline2satrec(ISS_TLE[0], ISS_TLE[1]);
+    // console.log("satrec", satrec);
+    // // Get the position of the satellite at the given date
+    // const date = new Date();
+    // date.setHours(date.getHours() + 4);
+    // const positionAndVelocity = satellite.propagate(satrec, date);
+    // if (typeof positionAndVelocity === "boolean") {
+    //   console.log("Is a boolean.", positionAndVelocity);
+    //   return;
+    // }
+    // const gmst = satellite.gstime(date);
+    // const position = satellite.eciToGeodetic(
+    //   positionAndVelocity.position as any,
+    //   gmst
+    // );
+    // console.log("Positional data:");
+    // console.log(position);
+    // console.log(position.longitude); // in radians
+    // console.log(position.latitude); // in radians
+    // console.log(position.height); // in km
   }
 
   function init(): void {
@@ -127,7 +124,7 @@ function Kepler() {
 
     // Init the MMOD meshes, small object points that will be orbiting the
     // earth sphere.
-    for (let i = 0; i < 500; i++) {
+    for (let i = 0; i < 30; i++) {
       const mmod = new MMOD(scene);
       mmods.push(mmod);
     }
@@ -180,8 +177,8 @@ function Kepler() {
     // console.log(position.latitude); // in radians
     // console.log(position.height); // in km
 
-    const aggregator = new Aggregator();
-    aggregator.example();
+    // const aggregator = new Aggregator();
+    // aggregator.example();
   }
 
   function onWindowResize(): void {
@@ -199,10 +196,12 @@ function Kepler() {
   function animate(): void {
     time += SECONDS_PER_FRAME;
 
-    requestAnimationFrame(animate);
+    setInterval(() => {
+      requestAnimationFrame(animate);
+    }, 4000);
 
     for (const mmod of mmods) {
-      // const MMOD_TLE = mmod.tle(new Date());
+      mmod.step(time);
     }
 
     render();

@@ -1,7 +1,7 @@
 export class Random {
   public static number(min: number, max: number): number {
     // Min and max define the range that the random value will be generated in.
-    return Math.random() * (max - min + 1) + min;
+    return min + Math.random() * (max - min);
   }
 
   public static address(): string {

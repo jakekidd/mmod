@@ -19,6 +19,8 @@ const MATERIAL_DENSITY_MAP: { [material: string]: number } = {
  */
 const MU_EARTH = 3.986e14;
 
+let COUNT = 0;
+
 export class MMOD {
   // The three js object to be rendered.
   public readonly mesh: THREE.Mesh;
@@ -38,24 +40,24 @@ export class MMOD {
   // public semiMajorAxis: number;
   // Inclination is the vertical tilt of the ellipse with
   // respect to the reference plane.
-  public inclination: number;
+  // public inclination: number;
   // The right ascension of the ascending node is the angle
   // from a specified reference direction, called the origin
   // of longitude, to the direction of the ascending node.
-  public longitude: number;
+  // public longitude: number;
   // Eccentricity represents the shape of the orbital ellipse,
   // describing how much it is elongated compared to a circle.
-  public eccentricity: number;
+  // public eccentricity: number;
   // The argument of perigee is, parametrically, the angle
   // from the body's ascending node to its periapsis, measured
   // in the direction of motion.
-  public perigee: number;
+  // public perigee: number;
   // Mean motion is revolutions per day.
-  public motion: number;
+  // public motion: number;
   // Mean anomaly is the fraction of an elliptical orbit's
   // period that has elapsed since the orbiting body passed
   // periapsis.
-  public anomaly: number;
+  // public anomaly: number;
   // TODO: Again, think on this. Could be prohibitive, but
   // maybe we can exclude from target consensus data model?
   // Revolution number (typically at a given epoch) is just
@@ -91,10 +93,18 @@ export class MMOD {
   // Constants
   earthRadius: number = 6371; // in km
 
+  shouldLog = false;
+
   /**
    * A small point object representing orbiting debris.
    */
   constructor(scene: THREE.Scene) {
+    // TODO: test remove
+    // if (COUNT === 0) {
+    //   this.shouldLog = true;
+    // }
+    // COUNT++;
+
     // Generate random position in low earth orbit
     const altitude = Math.floor(Math.random() * 1300) + 700; // altitude between 700-2000 km
     const longitude = Math.random() * 360; // random longitude
@@ -130,6 +140,16 @@ export class MMOD {
       trueAnomalyAtEpoch: Random.number(0, 360),
     };
 
+    console.log("ORBIT DETERMINED: ", this.orbit);
+    console.log(
+      "Randoms:",
+      Random.number(0, 0.5),
+      Random.number(0, 0.5),
+      Random.number(0, 0.5),
+      Random.number(0, 0.5),
+      Random.number(0, 0.5)
+    );
+
     // Other properties (random values for demonstration)
     this.material = "Metal";
     this.mass = Random.number(1.0, 300.0); // random value
@@ -144,7 +164,7 @@ export class MMOD {
     // Derive ballistic coefficient using the density-based formula.
     this.ballisticCoefficient = 0.5 * this.density * this.diameter * this.drag;
 
-    const geometry = new THREE.SphereGeometry(1, 1, 1);
+    const geometry = new THREE.SphereGeometry(5, 4, 4);
     const material = new THREE.MeshPhongMaterial({
       color: new THREE.Color().setHSL(0.9, 0.9, 0.9, THREE.SRGBColorSpace),
       side: THREE.DoubleSide,
@@ -157,43 +177,25 @@ export class MMOD {
     // spherical coordinates, theta and phi with 0 < theta < 2pi and
     // 0 < phi < pi.
     // Generate random values for theta and phi.
-    const theta = Random.number(0.01, 2 * Math.PI);
-    const phi = Math.acos(Random.number(-1, 1));
+    // const theta = Random.number(0.01, 2 * Math.PI);
+    // const phi = Math.acos(Random.number(-1, 1));
     // TODO: Vary the radius slightly.
     // Convert theta and phi into cartesian coordinates for the mesh.
     // The LEO radius will be varied slightly by a modifier, targeting
     // anywhere from 1000 km to 2000 km above the surface of the earth.
-    this.mesh.position.x = LEO_RADIUS * Math.cos(theta) * Math.sin(phi);
-    this.mesh.position.y = LEO_RADIUS * Math.sin(theta) * Math.sin(phi);
-    this.mesh.position.z = LEO_RADIUS * Math.cos(phi);
+    const threePosition = this.toThreeJSPosition();
+    this.mesh.position.x = threePosition.x; //LEO_RADIUS * Math.cos(theta) * Math.sin(phi);
+    this.mesh.position.y = threePosition.y; //LEO_RADIUS * Math.sin(theta) * Math.sin(phi);
+    this.mesh.position.z = threePosition.z; //LEO_RADIUS * Math.cos(phi);
     this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = MMOD_SCALE;
 
     // Set mean motion at random.
     // Initial speed (scalar) should be anywhere from 6-9 km/s.
-    const initialSpeed = Random.number(6000, 9000); // In m/s.
-    // Convert this to approximate (non-elliptical) revolutions per day.
-    const circumference = 46357.341; // 2pi * 7378 (mean LEO).
-    const dayDistanceTraveled = initialSpeed * 86400; // Seconds in a day.
-    this.motion = dayDistanceTraveled / circumference;
-
-    // Set inclination at random.
-    this.inclination = Random.number(40.0, 60.0);
-
-    // Set eccentricity at random.
-    this.eccentricity = Random.number(0.0, 0.0009);
-
-    // Set argument of perigee at random.
-    this.perigee = Random.number(100.0, 150.0);
-
-    // Set mean anomaly at random.
-    this.anomaly = Random.number(300.0, 350.0);
-
-    // Set longitude at random.
-    this.longitude = Random.number(200, 300);
-
-    // Set mass, diameter at random.
-    this.mass = Random.number(0.01, 0.2);
-    this.diameter = Random.number(0.0001, 0.0003);
+    // const initialSpeed = Random.number(6000, 9000); // In m/s.
+    // // Convert this to approximate (non-elliptical) revolutions per day.
+    // const circumference = 46357.341; // 2pi * 7378 (mean LEO).
+    // const dayDistanceTraveled = initialSpeed * 86400; // Seconds in a day.
+    // this.motion = dayDistanceTraveled / circumference;
 
     scene.add(this.mesh);
   }
@@ -203,12 +205,37 @@ export class MMOD {
    * @param timestamp Time in seconds since init. It's assumed that we init at 0.
    */
   public step(timestamp: number): void {
+    if (this.shouldLog) {
+      console.log(
+        "Current position MMOD:",
+        this.position.x,
+        this.position.y,
+        this.position.z,
+        ...Array.from(Object.values(this.toThreeJSPosition()))
+      );
+    }
+
+    // TODO: Move to constants!
     // Logic to calculate new position based on timestamp.
     const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2.
     const earthMass = 5.972e24; // Earth mass in kg.
 
     // Convert timestamp to seconds.
     const t = timestamp / 1000;
+
+    // Validate input values: semiMajorAxis should be positive, eccentricity should be between 0 and 1.
+    if (
+      this.orbit.semiMajorAxis <= 0 ||
+      this.orbit.eccentricity < 0 ||
+      this.orbit.eccentricity >= 1
+    ) {
+      console.error(
+        "Invalid input values for semiMajorAxis or eccentricity.",
+        this.orbit.semiMajorAxis,
+        this.orbit.eccentricity
+      );
+      return; // Exit function early to prevent further calculations with invalid inputs.
+    }
 
     // Calculate mean anomaly (M) based on Kepler's equation.
     const n = Math.sqrt(
@@ -230,26 +257,49 @@ export class MMOD {
       eccentricAnomaly -= delta;
     }
 
+    // console.log("stuff 1", meanAnomaly, eccentricAnomaly, delta);
+
     // Calculate true anomaly (ν) from eccentric anomaly (E).
-    const cosTrueAnomaly =
-      (Math.cos(eccentricAnomaly) - this.orbit.eccentricity) /
-      (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
-    const sinTrueAnomaly =
-      (Math.sqrt(1 - this.orbit.eccentricity * this.orbit.eccentricity) *
-        Math.sin(eccentricAnomaly)) /
-      (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
-    const trueAnomaly = Math.atan2(sinTrueAnomaly, cosTrueAnomaly);
+    const trueAnomaly =
+      2 *
+      Math.atan(
+        Math.sqrt(
+          (1 + this.orbit.eccentricity) / (1 - this.orbit.eccentricity)
+        ) * Math.tan(eccentricAnomaly / 2)
+      );
 
     // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
     const radius =
       (this.orbit.semiMajorAxis *
-        1000 *
         (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
       (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
 
     // Calculate position in orbital plane (x', y').
     const xPrime = radius * Math.cos(trueAnomaly);
     const yPrime = radius * Math.sin(trueAnomaly);
+
+    // console.log(trueAnomaly, radius, xPrime, yPrime);
+
+    // // Calculate true anomaly (ν) from eccentric anomaly (E).
+    // const cosTrueAnomaly =
+    //   (Math.cos(eccentricAnomaly) - this.orbit.eccentricity) /
+    //   (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
+    // const sinTrueAnomaly =
+    //   (Math.sqrt(1 - this.orbit.eccentricity * this.orbit.eccentricity) *
+    //     Math.sin(eccentricAnomaly)) /
+    //   (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
+    // const trueAnomaly = Math.atan2(sinTrueAnomaly, cosTrueAnomaly);
+
+    // // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
+    // const radius =
+    //   (this.orbit.semiMajorAxis *
+    //     1000 *
+    //     (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
+    //   (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
+
+    // // Calculate position in orbital plane (x', y').
+    // const xPrime = radius * Math.cos(trueAnomaly);
+    // const yPrime = radius * Math.sin(trueAnomaly);
 
     // Rotate position to align with orbital elements.
     const cosLongitudeAscendingNode = Math.cos(
@@ -262,6 +312,15 @@ export class MMOD {
     const sinArgumentPeriapsis = Math.sin(this.orbit.argumentPeriapsis);
     const cosInclination = Math.cos(this.orbit.inclination);
     const sinInclination = Math.sin(this.orbit.inclination);
+
+    // console.log(
+    //   cosLongitudeAscendingNode,
+    //   sinLongitudeAscendingNode,
+    //   cosArgumentPeriapsis,
+    //   sinArgumentPeriapsis,
+    //   cosInclination,
+    //   sinInclination
+    // );
 
     const x =
       xPrime *
@@ -287,9 +346,26 @@ export class MMOD {
     // Finally, convert to three.js coordinate space and update the mesh's
     // position.
     const threePosition = this.toThreeJSPosition();
-    this.mesh.position.x = threePosition.x;
-    this.mesh.position.y = threePosition.y;
-    this.mesh.position.z = threePosition.z;
+
+    if (this.shouldLog) {
+      console.log(
+        "New position for mmod:",
+        this.position.x,
+        this.position.y,
+        this.position.z,
+        threePosition.x,
+        threePosition.y,
+        threePosition.z
+      );
+    }
+
+    // this.mesh.position.x = threePosition.x;
+    // this.mesh.position.y = threePosition.y;
+    // this.mesh.position.z = threePosition.z;
+    this.mesh.position.set(threePosition.x, threePosition.y, threePosition.z);
+    this.mesh.updateMatrix();
+    // this.mesh.
+    // this.mesh.translateX();
   }
 
   public tle(timestamp: Date): TLE {
@@ -310,11 +386,11 @@ export class MMOD {
     }-${BSTARDragTerm.toFixed(4).replace(/-/g, " ").padStart(6, " ")} 0`;
 
     // Line 2
-    const line2 = `2 ${this.catalogNumber} ${this.inclination
+    const line2 = `2 ${this.catalogNumber} ${this.orbit.inclination
       .toFixed(4)
       .padStart(8, " ")}${this.orbit.longitudeAscendingNode
       .toFixed(4)
-      .padStart(8, " ")}${(this.eccentricity * 1e7)
+      .padStart(8, " ")}${(this.orbit.eccentricity * 1e7)
       .toFixed(7)
       .replace(/\.?0+$/, "")
       .padStart(7, " ")}${this.orbit.argumentPeriapsis
@@ -355,9 +431,7 @@ export class MMOD {
     );
 
     // Return the first derivative of mean motion
-    return (
-      -1.5 * meanMotion * this.orbit.eccentricity * this.orbit.eccentricity
-    );
+    return -1.5 * meanMotion * this.orbit.eccentricity ** 2;
   }
 
   // Function to calculate the second derivative of mean motion
@@ -459,7 +533,7 @@ export class MMOD {
   // Function to convert position to three.js coordinates
   private toThreeJSPosition(): { x: number; y: number; z: number } {
     // Scaling down the position to fit with three.js coordinates (assuming earth sphere radius is 16)
-    const scaleFactor = 16 / 6371; // TODO: Should be constants!
+    const scaleFactor = 20 / 6371; // TODO: Should be constants!
     return {
       x: this.position.x * scaleFactor,
       y: this.position.y * scaleFactor,
