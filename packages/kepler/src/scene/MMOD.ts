@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { LEO_RADIUS, MMOD_SCALE } from "../helpers/Constants.ts";
+import { MMOD_SCALE } from "../helpers/Constants.ts";
 import { Random } from "../helpers/Random.ts";
+import { Interpolate } from "../helpers/Interpolate.ts";
 
 export type TLE = [string, string];
 
@@ -40,6 +41,9 @@ type MMODOrbit = {
   argumentPeriapsis: number;
   trueAnomalyAtEpoch: number;
 };
+
+// TODO: Move to constants
+const PARITY = 1000 * 60 * 60; // 1 hour.
 
 export class MMOD {
   // The three js object to be rendered.
@@ -103,7 +107,7 @@ export class MMOD {
   /**
    * A small point object representing orbiting debris.
    */
-  constructor(args: {
+  constructor(args?: {
     scene?: THREE.Scene;
     flight?: {
       path: { x: number; y: number; z: number }[];
@@ -117,7 +121,7 @@ export class MMOD {
     // }
     // COUNT++;
 
-    if (args.flight) {
+    if (args && args.flight) {
       this.orbit = args.flight.orbit;
       this.specs = args.flight.specs;
       this.position = {
@@ -203,7 +207,7 @@ export class MMOD {
     // const dayDistanceTraveled = initialSpeed * 86400; // Seconds in a day.
     // this.motion = dayDistanceTraveled / circumference;
 
-    if (args.scene) {
+    if (args && args.scene) {
       this.initThreeJSMesh(args.scene);
     }
   }
@@ -212,178 +216,181 @@ export class MMOD {
    * Proceed to the next animation frame. Reposition the
    * @param timestamp Time in seconds since init. It's assumed that we init at 0.
    */
-  public step(timestamp: number, shouldMove = true): void {
-    if (this.shouldLog) {
-      console.log(
-        "Current position MMOD:",
-        this.position.x,
-        this.position.y,
-        this.position.z,
-        ...Array.from(Object.values(this.toThreeJSPosition()))
+  public step(
+    timestamp: number,
+    shouldMove = true,
+    canInterpolate = true
+  ): boolean {
+    if (this.path) {
+      return this.updatePositionFromFlightPath(
+        0,
+        PARITY,
+        timestamp,
+        canInterpolate
       );
-    }
+    } else {
+      // TODO: Move to constants!
+      // Logic to calculate new position based on timestamp.
+      const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2.
+      const earthMass = 5.972e24; // Earth mass in kg.
 
-    // TODO: Move to constants!
-    // Logic to calculate new position based on timestamp.
-    const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2.
-    const earthMass = 5.972e24; // Earth mass in kg.
+      // Convert timestamp to seconds.
+      const t = timestamp / 1000;
 
-    // Convert timestamp to seconds.
-    const t = timestamp / 1000;
-
-    // Validate input values: semiMajorAxis should be positive, eccentricity should be between 0 and 1.
-    if (
-      this.orbit.semiMajorAxis <= 0 ||
-      this.orbit.eccentricity < 0 ||
-      this.orbit.eccentricity >= 1
-    ) {
-      console.error(
-        "Invalid input values for semiMajorAxis or eccentricity.",
-        this.orbit.semiMajorAxis,
-        this.orbit.eccentricity
-      );
-      return; // Exit function early to prevent further calculations with invalid inputs.
-    }
-
-    // Calculate mean anomaly (M) based on Kepler's equation.
-    const n = Math.sqrt(
-      (G * earthMass) / Math.pow(this.orbit.semiMajorAxis * 1000, 3)
-    ); // Mean motion.
-    let meanAnomaly = this.orbit.trueAnomalyAtEpoch - n * t;
-
-    // Iteratively solve Kepler's equation for eccentric anomaly (E).
-    let eccentricAnomaly = meanAnomaly; // Initial guess for eccentric anomaly.
-    let delta = 1;
-    const tolerance = 1e-10; // Tolerance for convergence.
-    while (Math.abs(delta) > tolerance) {
-      const f =
-        eccentricAnomaly -
-        this.orbit.eccentricity * Math.sin(eccentricAnomaly) -
-        meanAnomaly;
-      const fPrime = 1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly);
-      delta = f / fPrime;
-      eccentricAnomaly -= delta;
-    }
-
-    // console.log("stuff 1", meanAnomaly, eccentricAnomaly, delta);
-
-    // Calculate true anomaly (ν) from eccentric anomaly (E).
-    const trueAnomaly =
-      2 *
-      Math.atan(
-        Math.sqrt(
-          (1 + this.orbit.eccentricity) / (1 - this.orbit.eccentricity)
-        ) * Math.tan(eccentricAnomaly / 2)
-      );
-
-    // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
-    const radius =
-      (this.orbit.semiMajorAxis *
-        (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
-      (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
-
-    // Calculate position in orbital plane (x', y').
-    const xPrime = radius * Math.cos(trueAnomaly);
-    const yPrime = radius * Math.sin(trueAnomaly);
-
-    // console.log(trueAnomaly, radius, xPrime, yPrime);
-
-    // // Calculate true anomaly (ν) from eccentric anomaly (E).
-    // const cosTrueAnomaly =
-    //   (Math.cos(eccentricAnomaly) - this.orbit.eccentricity) /
-    //   (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
-    // const sinTrueAnomaly =
-    //   (Math.sqrt(1 - this.orbit.eccentricity * this.orbit.eccentricity) *
-    //     Math.sin(eccentricAnomaly)) /
-    //   (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
-    // const trueAnomaly = Math.atan2(sinTrueAnomaly, cosTrueAnomaly);
-
-    // // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
-    // const radius =
-    //   (this.orbit.semiMajorAxis *
-    //     1000 *
-    //     (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
-    //   (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
-
-    // // Calculate position in orbital plane (x', y').
-    // const xPrime = radius * Math.cos(trueAnomaly);
-    // const yPrime = radius * Math.sin(trueAnomaly);
-
-    // Rotate position to align with orbital elements.
-    const cosLongitudeAscendingNode = Math.cos(
-      this.orbit.longitudeAscendingNode
-    );
-    const sinLongitudeAscendingNode = Math.sin(
-      this.orbit.longitudeAscendingNode
-    );
-    const cosArgumentPeriapsis = Math.cos(this.orbit.argumentPeriapsis);
-    const sinArgumentPeriapsis = Math.sin(this.orbit.argumentPeriapsis);
-    const cosInclination = Math.cos(this.orbit.inclination);
-    const sinInclination = Math.sin(this.orbit.inclination);
-
-    // console.log(
-    //   cosLongitudeAscendingNode,
-    //   sinLongitudeAscendingNode,
-    //   cosArgumentPeriapsis,
-    //   sinArgumentPeriapsis,
-    //   cosInclination,
-    //   sinInclination
-    // );
-
-    const x =
-      xPrime *
-        (cosLongitudeAscendingNode * cosArgumentPeriapsis -
-          sinLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination) -
-      yPrime *
-        (sinLongitudeAscendingNode * cosArgumentPeriapsis +
-          cosLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination);
-    const y =
-      xPrime *
-        (cosLongitudeAscendingNode * sinArgumentPeriapsis +
-          sinLongitudeAscendingNode * cosArgumentPeriapsis * cosInclination) +
-      yPrime *
-        (cosLongitudeAscendingNode * cosArgumentPeriapsis -
-          sinLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination);
-    const z =
-      xPrime * (sinLongitudeAscendingNode * sinInclination) +
-      yPrime * (cosLongitudeAscendingNode * sinInclination);
-
-    // Update object position.
-    this.position = { x, y, z };
-
-    if (this.mesh) {
-      // Finally, convert to three.js coordinate space and update the mesh's
-      // position.
-      const threePosition = this.toThreeJSPosition();
-
-      if (this.shouldLog) {
-        console.log(
-          "New position for mmod:",
-          this.position.x,
-          this.position.y,
-          this.position.z,
-          threePosition.x,
-          threePosition.y,
-          threePosition.z
+      // Validate input values: semiMajorAxis should be positive, eccentricity should be between 0 and 1.
+      if (
+        this.orbit.semiMajorAxis <= 0 ||
+        this.orbit.eccentricity < 0 ||
+        this.orbit.eccentricity >= 1
+      ) {
+        console.error(
+          "Invalid input values for semiMajorAxis or eccentricity.",
+          this.orbit.semiMajorAxis,
+          this.orbit.eccentricity
         );
+        return false; // Exit function early to prevent further calculations with invalid inputs.
       }
 
-      if (shouldMove) {
-        this.mesh.position.set(
-          threePosition.x,
-          threePosition.y,
-          threePosition.z
+      // Calculate mean anomaly (M) based on Kepler's equation.
+      const n = Math.sqrt(
+        (G * earthMass) / Math.pow(this.orbit.semiMajorAxis * 1000, 3)
+      ); // Mean motion.
+      let meanAnomaly = this.orbit.trueAnomalyAtEpoch - n * t;
+
+      // Iteratively solve Kepler's equation for eccentric anomaly (E).
+      let eccentricAnomaly = meanAnomaly; // Initial guess for eccentric anomaly.
+      let delta = 1;
+      const tolerance = 1e-10; // Tolerance for convergence.
+      while (Math.abs(delta) > tolerance) {
+        const f =
+          eccentricAnomaly -
+          this.orbit.eccentricity * Math.sin(eccentricAnomaly) -
+          meanAnomaly;
+        const fPrime = 1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly);
+        delta = f / fPrime;
+        eccentricAnomaly -= delta;
+      }
+
+      // console.log("stuff 1", meanAnomaly, eccentricAnomaly, delta);
+
+      // Calculate true anomaly (ν) from eccentric anomaly (E).
+      const trueAnomaly =
+        2 *
+        Math.atan(
+          Math.sqrt(
+            (1 + this.orbit.eccentricity) / (1 - this.orbit.eccentricity)
+          ) * Math.tan(eccentricAnomaly / 2)
         );
-        this.mesh.updateMatrix();
+
+      // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
+      const radius =
+        (this.orbit.semiMajorAxis *
+          (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
+        (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
+
+      // Calculate position in orbital plane (x', y').
+      const xPrime = radius * Math.cos(trueAnomaly);
+      const yPrime = radius * Math.sin(trueAnomaly);
+
+      // console.log(trueAnomaly, radius, xPrime, yPrime);
+
+      // // Calculate true anomaly (ν) from eccentric anomaly (E).
+      // const cosTrueAnomaly =
+      //   (Math.cos(eccentricAnomaly) - this.orbit.eccentricity) /
+      //   (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
+      // const sinTrueAnomaly =
+      //   (Math.sqrt(1 - this.orbit.eccentricity * this.orbit.eccentricity) *
+      //     Math.sin(eccentricAnomaly)) /
+      //   (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
+      // const trueAnomaly = Math.atan2(sinTrueAnomaly, cosTrueAnomaly);
+
+      // // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
+      // const radius =
+      //   (this.orbit.semiMajorAxis *
+      //     1000 *
+      //     (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
+      //   (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
+
+      // // Calculate position in orbital plane (x', y').
+      // const xPrime = radius * Math.cos(trueAnomaly);
+      // const yPrime = radius * Math.sin(trueAnomaly);
+
+      // Rotate position to align with orbital elements.
+      const cosLongitudeAscendingNode = Math.cos(
+        this.orbit.longitudeAscendingNode
+      );
+      const sinLongitudeAscendingNode = Math.sin(
+        this.orbit.longitudeAscendingNode
+      );
+      const cosArgumentPeriapsis = Math.cos(this.orbit.argumentPeriapsis);
+      const sinArgumentPeriapsis = Math.sin(this.orbit.argumentPeriapsis);
+      const cosInclination = Math.cos(this.orbit.inclination);
+      const sinInclination = Math.sin(this.orbit.inclination);
+
+      const x =
+        xPrime *
+          (cosLongitudeAscendingNode * cosArgumentPeriapsis -
+            sinLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination) -
+        yPrime *
+          (sinLongitudeAscendingNode * cosArgumentPeriapsis +
+            cosLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination);
+      const y =
+        xPrime *
+          (cosLongitudeAscendingNode * sinArgumentPeriapsis +
+            sinLongitudeAscendingNode * cosArgumentPeriapsis * cosInclination) +
+        yPrime *
+          (cosLongitudeAscendingNode * cosArgumentPeriapsis -
+            sinLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination);
+      const z =
+        xPrime * (sinLongitudeAscendingNode * sinInclination) +
+        yPrime * (cosLongitudeAscendingNode * sinInclination);
+
+      // Update object position.
+      this.position = { x, y, z };
+
+      if (this.mesh) {
+        // Finally, convert to three.js coordinate space and update the mesh's
+        // position.
+        const threePosition = this.toThreeJSPosition();
+
+        if (this.shouldLog) {
+          console.log(
+            "New position for mmod:",
+            this.position.x,
+            this.position.y,
+            this.position.z,
+            threePosition.x,
+            threePosition.y,
+            threePosition.z
+          );
+        }
+
+        if (shouldMove) {
+          this.mesh.position.set(
+            threePosition.x,
+            threePosition.y,
+            threePosition.z
+          );
+          this.mesh.updateMatrix();
+        }
       }
     }
+
+    return true;
   }
 
-  public stepMesh(newPos?: { x: number; y: number; z: number }) {
+  // TODO: Maybe not needed?
+  // Timestamp should be num in ms.
+  public stepMesh(args: {
+    newPos?: { x: number; y: number; z: number };
+    timestamp: number;
+  }): boolean {
     if (!this.mesh) {
       console.warn("`stepMesh` was called with no mesh instiantiated.");
-      return;
+      return false;
     }
+
+    const { newPos, timestamp } = args;
 
     if (newPos) {
       this.mesh.position.set(newPos.x, newPos.y, newPos.z);
@@ -393,33 +400,60 @@ export class MMOD {
           "stepMesh error: New position must be provided if no flight path given."
         );
       }
+      const res = this.updatePositionFromFlightPath(0, PARITY, timestamp);
+      if (!res) {
+        // Flight path is over, no need to update matrix.
+        return false;
+      }
     }
 
     this.mesh.updateMatrix();
+    return true;
   }
 
   private updatePositionFromFlightPath(
-    startTimestamp: number,
+    startTime: number,
     parity: number,
-    currentTime: number
-  ) {
+    currentTime: number,
+    canInterpolate = true
+  ): boolean {
     if (!this.path) {
       throw new Error(
         "updatePositionFromFlightPath error: Cannot update if no flight path provided."
       );
     }
-    if (currentTime < startTimestamp) {
-      console.log("Current time must be after the start timestamp.");
-      return null;
+    if (currentTime < startTime) {
+      throw new Error(
+        "updatePositionFromFlightPath error: Current time must be after the start timestamp."
+      );
     }
 
-    // First, get the index
-    const index = Math.floor((currentTime - startTimestamp) / parity);
-
+    // First, find the index of the points we'll be interpolating.
+    const index = Math.floor((currentTime - startTime) / parity);
     if (index < 0 || index >= this.path.length - 1) {
+      // This usually happens if the flight path is over.
+      // TODO: Fn to reset at beginning of path.
       console.log("Current time is not between any two points' timestamps.");
-      return null;
+      return false;
     }
+
+    let newPos: { x: number; y: number; z: number };
+    if (canInterpolate) {
+      newPos = Interpolate.linear(
+        { ...this.path[index], t: startTime + index * parity },
+        { ...this.path[index + 1], t: startTime + (index + 1) * parity },
+        currentTime
+      );
+    } else {
+      newPos = this.path[index];
+    }
+
+    this.position = { x: newPos.x, y: newPos.y, z: newPos.z };
+    if (this.mesh) {
+      this.mesh.position.set(newPos.x, newPos.y, newPos.z);
+    }
+
+    return true;
   }
 
   public tle(timestamp: Date): TLE {

@@ -95,27 +95,3 @@ export function precalc() {
 }
 
 precalc();
-
-// function getAllJsonFiles(directory: string): string[] {
-//   const files: string[] = [];
-
-//   // Get all files and directories in the specified directory
-//   const entries = fs.readdirSync(directory);
-
-//   // Iterate through each entry
-//   for (const entry of entries) {
-//       const entryPath = path.join(directory, entry);
-//       // Check if the entry is a directory
-//       if (fs.statSync(entryPath).isDirectory()) {
-//           // Recursively call getAllJsonFiles if it's a directory
-//           files.push(...getAllJsonFiles(entryPath));
-//       } else {
-//           // Check if the entry is a JSON file
-//           if (path.extname(entryPath) === '.json') {
-//               files.push(entryPath);
-//           }
-//       }
-//   }
-
-//   return files;
-// }

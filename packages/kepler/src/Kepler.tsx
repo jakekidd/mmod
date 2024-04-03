@@ -1,5 +1,7 @@
 import React, { useEffect } from "react";
 import "./Kepler.css";
+import fs from "fs";
+import * as path from "path";
 import * as THREE from "three";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
@@ -13,9 +15,10 @@ const GUI_PARAMS = {
   alphaToCoverage: true,
 };
 
-// TODO: Make this a GUI variable.
+// TODO: Make this a GUI variable ??
 // Seconds that will elapse in sim time per animation frame.
-const SECONDS_PER_FRAME = 2000;
+const FRAMERATE = 500;
+const SECONDS_PER_FRAME = 10;
 
 function Kepler() {
   // TODO: Move to state?
@@ -36,6 +39,21 @@ function Kepler() {
   let alice: Identifier;
 
   useEffect(init, []);
+
+  // Gather all the flight path filepaths.
+  function collectFlightPaths(directory: string): string[] {
+    if (fs.existsSync(directory)) {
+      const files = fs.readdirSync(directory);
+      const jsonFiles = files.filter((file) => path.extname(file) === ".json");
+      const jsonFilePaths = jsonFiles.map((file) => path.join(directory, file));
+      return jsonFilePaths;
+    } else {
+      console.error(
+        "collectFlightPaths error: No flight paths found in ./artifacts/orbits."
+      );
+      return [];
+    }
+  }
 
   // useEffect(tleTest, []);
   function tleTest(): void {
@@ -73,7 +91,8 @@ function Kepler() {
     initialized = true;
 
     // Set initial UTC timestamp in seconds.
-    time = new Date().getUTCSeconds();
+    // time = new Date().getUTCSeconds();
+    time = 0; // TODO: Is this right?
 
     // Init the three.js WebGLRenderer, which will draw the scene on the canvas.
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -124,15 +143,19 @@ function Kepler() {
 
     // Init the MMOD meshes, small object points that will be orbiting the
     // earth sphere.
-    for (let i = 0; i < 30; i++) {
-      const mmod = new MMOD(scene);
+    const files = collectFlightPaths("./artifacts/orbits");
+    for (let i = 0; i < files.length; i++) {
+      const data = fs.readFileSync(files[i]).toString();
+      const flight = JSON.parse(data);
+      const mmod = new MMOD({ scene, flight });
       mmods.push(mmod);
     }
 
+    // TODO: Fix Alice's light cone.
     // Init Alice, an Identifier.
-    alice = new Identifier(scene);
+    // alice = new Identifier(scene);
 
-    // Init and set up the mini GUI
+    // Init and set up the mini GUI.
     const gui = new GUI();
     gui.add(GUI_PARAMS, "alphaToCoverage").onChange(function (value) {
       earthGroup.children.forEach((c: any) => {
@@ -198,7 +221,7 @@ function Kepler() {
 
     setInterval(() => {
       requestAnimationFrame(animate);
-    }, 4000);
+    }, FRAMERATE);
 
     for (const mmod of mmods) {
       mmod.step(time);
