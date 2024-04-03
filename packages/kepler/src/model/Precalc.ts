@@ -1,8 +1,14 @@
-import { calculatePositionOverTimeAndAppend } from "../helpers/PathGenerator";
-import { MMOD } from "../scene/MMOD";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+import { calculatePositionOverTimeAndAppend } from "../helpers/PathGenerator.ts";
+import { MMOD } from "../scene/MMOD.ts";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Generate a bundle of stable flight paths over a given number of days.
 export function precalc() {
+  console.log("test");
   // Determine target count. If `count` argument is passed, we use that, otherwise
   // default is 500 MMODs.
   let targetCount = 500;
@@ -38,12 +44,15 @@ export function precalc() {
   // Determine target time parity. This will determine the "framerate" of the sim. If `parity`
   // is passed in, we use that, otherwise the default is 1 second.
   let targetParity = 1000; // In ms to match targetTime.
+  console.log(process.argv);
   if (process.argv.length >= 4) {
     for (let i = 0; i < process.argv.length; i++) {
-      if (process.argv[i] === "--days" && i < process.argv.length - 2) {
+      console.log("testt", process.argv[i], process.argv[i] === "--parity");
+      if (process.argv[i] === "--parity" && i < process.argv.length - 2) {
+        console.log("test");
         const argParity = parseInt(process.argv[i + 1]);
         if (!isNaN(argParity)) {
-          console.log(`Adjusting days to match argument: ${argParity}`);
+          console.log(`Adjusting parity to match argument: ${argParity}`);
           targetParity = argParity;
         }
       }
@@ -56,15 +65,21 @@ export function precalc() {
     mmods.push(mmod);
   }
 
+  console.log("FILE", __filename, __dirname);
+
+  if (!fs.existsSync("./artifacts") || !fs.existsSync("./artifacts/orbits")) {
+    fs.mkdirSync("./artifacts/orbits/", { recursive: true });
+  }
+
   // Go through each MMOD and run the path generator.
   for (let i = 0; i < mmods.length; i++) {
-    console.log(`Calculating path for MMOD ${i}...`);
-    // calculatePositionOverTimeAndAppend(
-    //   mmods[i],
-    //   targetTime,
-    //   targetParity,
-    //   "../precalc.json"
-    // );
+    console.log(`Calculating path for MMOD ${i + 1}...`);
+    calculatePositionOverTimeAndAppend(
+      mmods[i],
+      targetTime,
+      targetParity,
+      "./artifacts/orbits"
+    );
   }
 
   // Example usage

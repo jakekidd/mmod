@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { LEO_RADIUS, MMOD_SCALE } from "../helpers/Constants";
-import { Random } from "../helpers/Random";
+import { LEO_RADIUS, MMOD_SCALE } from "../helpers/Constants.ts";
+import { Random } from "../helpers/Random.ts";
 
 export type TLE = [string, string];
 
