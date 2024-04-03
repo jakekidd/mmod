@@ -106,8 +106,8 @@ export class MMOD {
     // COUNT++;
 
     // Generate random position in low earth orbit
-    const altitude = Math.floor(Math.random() * 1300) + 700; // altitude between 700-2000 km
-    const longitude = Math.random() * 360; // random longitude
+    const altitude = Random.number(700, 2000); // altitude between 700-2000 km
+    const longitude = Random.number(0, 360); // random longitude
     const latitude = Math.random() * 180 - 90; // random latitude
 
     // Convert spherical coordinates to Cartesian coordinates
@@ -122,7 +122,7 @@ export class MMOD {
     // Generate random elliptical orbit path
     this.orbit = {
       semiMajorAxis: Random.number(700, 2000), // semi-major axis between 1300-2000 km
-      eccentricity: Random.number(0, 0.5),
+      eccentricity: Random.number(0, 0.1),
 
       // TODO: I think more common around 80-100..?
       // Inclination between the plane of the orbit and the reference plane.
@@ -139,16 +139,6 @@ export class MMOD {
       // It describes the satellite's position along its orbit at a particular point in time.
       trueAnomalyAtEpoch: Random.number(0, 360),
     };
-
-    console.log("ORBIT DETERMINED: ", this.orbit);
-    console.log(
-      "Randoms:",
-      Random.number(0, 0.5),
-      Random.number(0, 0.5),
-      Random.number(0, 0.5),
-      Random.number(0, 0.5),
-      Random.number(0, 0.5)
-    );
 
     // Other properties (random values for demonstration)
     this.material = "Metal";
@@ -204,7 +194,7 @@ export class MMOD {
    * Proceed to the next animation frame. Reposition the
    * @param timestamp Time in seconds since init. It's assumed that we init at 0.
    */
-  public step(timestamp: number): void {
+  public step(timestamp: number, shouldMove = true): void {
     if (this.shouldLog) {
       console.log(
         "Current position MMOD:",
@@ -359,13 +349,15 @@ export class MMOD {
       );
     }
 
-    // this.mesh.position.x = threePosition.x;
-    // this.mesh.position.y = threePosition.y;
-    // this.mesh.position.z = threePosition.z;
-    this.mesh.position.set(threePosition.x, threePosition.y, threePosition.z);
+    if (shouldMove) {
+      this.mesh.position.set(threePosition.x, threePosition.y, threePosition.z);
+      this.mesh.updateMatrix();
+    }
+  }
+
+  public stepMesh(newX: number, newY: number, newZ: number) {
+    this.mesh.position.set(newX, newY, newZ);
     this.mesh.updateMatrix();
-    // this.mesh.
-    // this.mesh.translateX();
   }
 
   public tle(timestamp: Date): TLE {
@@ -402,6 +394,17 @@ export class MMOD {
       .replace(".", "")}`;
 
     return [line1, line2];
+  }
+
+  // Function to convert position to three.js coordinates
+  public toThreeJSPosition(): { x: number; y: number; z: number } {
+    // Scaling down the position to fit with three.js coordinates (assuming earth sphere radius is 16)
+    const scaleFactor = 20 / 6371; // TODO: Should be constants!
+    return {
+      x: this.position.x * scaleFactor,
+      y: this.position.y * scaleFactor,
+      z: this.position.z * scaleFactor,
+    };
   }
 
   private getMeanMotion(a: number, mu: number): number {
@@ -528,16 +531,5 @@ export class MMOD {
 
     // Calculate density using ideal gas law.
     return (pressure * M) / (R * temperature);
-  }
-
-  // Function to convert position to three.js coordinates
-  private toThreeJSPosition(): { x: number; y: number; z: number } {
-    // Scaling down the position to fit with three.js coordinates (assuming earth sphere radius is 16)
-    const scaleFactor = 20 / 6371; // TODO: Should be constants!
-    return {
-      x: this.position.x * scaleFactor,
-      y: this.position.y * scaleFactor,
-      z: this.position.z * scaleFactor,
-    };
   }
 }
