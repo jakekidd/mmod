@@ -77,17 +77,18 @@ export class MMOD {
     trueAnomalyAtEpoch: number;
   };
 
-  public ballisticCoefficient: number;
+  public specs: {
+    ballisticCoefficient: number;
+    // Variables used to calculate the ballistic coefficient.
+    volume: number; // In m^3.
+    mass: number; // In kg.
+    diameter: number; // In km.
+    drag: number; // Drag coefficient of a sphere.
+    density: number; // Density of aluminum. kg/m^3
 
-  // Variables used to calculate the ballistic coefficient.
-  public volume: number; // In m^3.
-  public mass: number; // In kg.
-  public diameter: number; // In km.
-  public drag = 0.47; // Drag coefficient of a sphere.
-  public density = 2700.0; // Density of aluminum. kg/m^3
-
-  // TODO: Make into an enum.
-  material: string;
+    // TODO: Make into an enum.
+    material: string;
+  };
 
   // TODO: Move to constants.
   // Constants
@@ -141,18 +142,29 @@ export class MMOD {
     };
 
     // Other properties (random values for demonstration)
-    this.material = "Metal";
-    this.mass = Random.number(1.0, 300.0); // random value
-    this.diameter = Random.number(0.1, 1); // random value
-    this.drag = Random.number(1.0, 2.2); // random value
+    const material = "Metal";
+    const mass = Random.number(1.0, 300.0); // random value
+    const diameter = Random.number(0.1, 1); // random value
+    const drag = Random.number(1.0, 2.2); // random value
 
-    const materialDensity = MATERIAL_DENSITY_MAP[this.material];
-    this.density = Random.number(materialDensity - 100, materialDensity + 100); // random value
+    const materialDensity = MATERIAL_DENSITY_MAP[material];
+    const density = Random.number(materialDensity - 100, materialDensity + 100); // random value
 
-    this.volume = (4 / 3) * Math.PI * Math.pow(this.diameter / 2, 3); // random value
+    // Using volume of a sphere for rough estimate.
+    const volume = (4 / 3) * Math.PI * Math.pow(diameter / 2, 3); // random value
 
     // Derive ballistic coefficient using the density-based formula.
-    this.ballisticCoefficient = 0.5 * this.density * this.diameter * this.drag;
+    const ballisticCoefficient = 0.5 * density * diameter * drag;
+
+    this.specs = {
+      material,
+      mass,
+      diameter,
+      drag,
+      density,
+      volume,
+      ballisticCoefficient,
+    };
 
     // Set mean motion at random.
     // Initial speed (scalar) should be anywhere from 6-9 km/s.
@@ -487,15 +499,11 @@ export class MMOD {
     // Constants
     // TODO: Move to constants!
     const earthRadius = 6371; // Earth radius in kilometers
-    const earthMass = 5.972e24; // Earth mass in kg
-    const dragCoefficient = 2.2; // Example drag coefficient
+    // const earthMass = 5.972e24; // Earth mass in kg
+    // const dragCoefficient = 2.2; // Example drag coefficient
 
     // Calculate the cross-sectional area of the object
-    const crossSectionalArea = Math.PI * Math.pow(this.diameter / 2, 2); // Assuming spherical object
-
-    // Calculate the ballistic coefficient
-    const ballisticCoefficient =
-      dragCoefficient * (crossSectionalArea / this.mass);
+    // const crossSectionalArea = Math.PI * Math.pow(this.specs.diameter / 2, 2); // Assuming spherical object
 
     // Calculate the atmospheric density at the object's altitude
     const altitudeFromEarthCenter = this.getPositionMagnitude() - earthRadius;
@@ -503,11 +511,12 @@ export class MMOD {
     const density = this.getAtmosphericDensity(altitudeFromSurface); // Example call to get atmospheric density
 
     // Calculate the BSTAR drag term
-    return -0.5 * ballisticCoefficient * density;
+    return -0.5 * this.specs.ballisticCoefficient * density;
   }
 
   private getMeanAnomaly(timestamp: number): number {
     // Constants
+    // TODO: Move to constants
     const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2
     const earthMass = 5.972e24; // Earth mass in kg
 
@@ -534,6 +543,7 @@ export class MMOD {
 
   // Function to estimate atmospheric density at a given altitude
   private getAtmosphericDensity(altitude: number): number {
+    // TODO: Move to constants.
     // Constants for US Standard Atmosphere model.
     // NOTE: This is just for the troposphere (up to 11k km).
     const T0 = 288.15; // Sea level temperature in Kelvin

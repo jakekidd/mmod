@@ -1,10 +1,9 @@
 import fs from "fs";
 import crypto from "crypto";
-import path from "path";
 import { MMOD } from "../scene/MMOD";
 
 // Function to calculate position over time for MMOD objects and append to JSON file.
-export function calculatePositionOverTimeAndAppend(
+export function calculatePositionOverTimeAndSave(
   mmod: MMOD,
   totalTime: number,
   timeStep: number,
@@ -44,9 +43,17 @@ export function calculatePositionOverTimeAndAppend(
     orbitsData = JSON.parse(fs.readFileSync(filepath, "utf-8"));
   }
 
+  // We JSON stringify here manually as stringify has a small heap limit.
   let out =
-    "[" + "\n" + positions.map((el) => JSON.stringify(el)).join(",\n") + "]";
-  out = `{ \"orbit\": ${out} }`;
+    "[" +
+    "\n" +
+    positions.map((el) => JSON.stringify(el, null, 2)).join(",\n") +
+    "]";
+  out = `{
+    \"orbit\": ${JSON.stringify(mmod.orbit, null, 2)}
+    \"specs\": ${JSON.stringify(mmod.specs, null, 2)}
+    \"path\": ${out},
+  }`;
 
   // Write the updated JSON data back to the file.
   fs.writeFileSync(filepath, out);

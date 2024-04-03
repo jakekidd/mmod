@@ -1,10 +1,13 @@
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import { calculatePositionOverTimeAndAppend } from "../helpers/PathGenerator.ts";
+import { calculatePositionOverTimeAndSave } from "../helpers/PathGenerator.ts";
 import { MMOD } from "../scene/MMOD.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// TODO: Move to constants
+const PARITY = 1000 * 60 * 60; // 1 hour.
 
 // Generate a bundle of stable flight paths over a given number of days.
 export function precalc() {
@@ -41,23 +44,24 @@ export function precalc() {
   // Convert targetDays to ms.
   const targetTime = targetDays * 24 * 60 * 60 * 1000;
 
+  // TODO: Redo this at a later time and parity
   // Determine target time parity. This will determine the "framerate" of the sim. If `parity`
   // is passed in, we use that, otherwise the default is 1 second.
-  let targetParity = 1000; // In ms to match targetTime.
-  console.log(process.argv);
-  if (process.argv.length >= 4) {
-    for (let i = 0; i < process.argv.length; i++) {
-      console.log("testt", process.argv[i], process.argv[i] === "--parity");
-      if (process.argv[i] === "--parity" && i < process.argv.length - 2) {
-        console.log("test");
-        const argParity = parseInt(process.argv[i + 1]);
-        if (!isNaN(argParity)) {
-          console.log(`Adjusting parity to match argument: ${argParity}`);
-          targetParity = argParity;
-        }
-      }
-    }
-  }
+  // let targetParity = 1000; // In ms to match targetTime.
+  // console.log(process.argv);
+  // if (process.argv.length >= 4) {
+  //   for (let i = 0; i < process.argv.length; i++) {
+  //     console.log("testt", process.argv[i], process.argv[i] === "--parity");
+  //     if (process.argv[i] === "--parity" && i < process.argv.length - 2) {
+  //       console.log("test");
+  //       const argParity = parseInt(process.argv[i + 1]);
+  //       if (!isNaN(argParity)) {
+  //         console.log(`Adjusting parity to match argument: ${argParity}`);
+  //         targetParity = argParity;
+  //       }
+  //     }
+  //   }
+  // }
 
   const mmods: MMOD[] = [];
   for (let i = 0; i < targetCount; i++) {
@@ -74,10 +78,10 @@ export function precalc() {
   // Go through each MMOD and run the path generator.
   for (let i = 0; i < mmods.length; i++) {
     console.log(`Calculating path for MMOD ${i + 1}...`);
-    calculatePositionOverTimeAndAppend(
+    calculatePositionOverTimeAndSave(
       mmods[i],
       targetTime,
-      targetParity,
+      PARITY,
       "./artifacts/orbits"
     );
   }
@@ -91,3 +95,27 @@ export function precalc() {
 }
 
 precalc();
+
+// function getAllJsonFiles(directory: string): string[] {
+//   const files: string[] = [];
+
+//   // Get all files and directories in the specified directory
+//   const entries = fs.readdirSync(directory);
+
+//   // Iterate through each entry
+//   for (const entry of entries) {
+//       const entryPath = path.join(directory, entry);
+//       // Check if the entry is a directory
+//       if (fs.statSync(entryPath).isDirectory()) {
+//           // Recursively call getAllJsonFiles if it's a directory
+//           files.push(...getAllJsonFiles(entryPath));
+//       } else {
+//           // Check if the entry is a JSON file
+//           if (path.extname(entryPath) === '.json') {
+//               files.push(entryPath);
+//           }
+//       }
+//   }
+
+//   return files;
+// }
