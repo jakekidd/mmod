@@ -19,7 +19,27 @@ const MATERIAL_DENSITY_MAP: { [material: string]: number } = {
  */
 const MU_EARTH = 3.986e14;
 
-let COUNT = 0;
+type MMODSpecs = {
+  ballisticCoefficient: number;
+  // Variables used to calculate the ballistic coefficient.
+  volume: number; // In m^3.
+  mass: number; // In kg.
+  diameter: number; // In km.
+  drag: number; // Drag coefficient of a sphere.
+  density: number; // Density of aluminum. kg/m^3
+
+  // TODO: Make into an enum.
+  material: string;
+};
+
+type MMODOrbit = {
+  semiMajorAxis: number;
+  eccentricity: number;
+  inclination: number;
+  longitudeAscendingNode: number;
+  argumentPeriapsis: number;
+  trueAnomalyAtEpoch: number;
+};
 
 export class MMOD {
   // The three js object to be rendered.
@@ -68,27 +88,11 @@ export class MMOD {
   public classification: "U" | "C" | "S" = "U";
 
   // TODO: Comment this
-  public orbit: {
-    semiMajorAxis: number;
-    eccentricity: number;
-    inclination: number;
-    longitudeAscendingNode: number;
-    argumentPeriapsis: number;
-    trueAnomalyAtEpoch: number;
-  };
+  public orbit: MMODOrbit;
 
-  public specs: {
-    ballisticCoefficient: number;
-    // Variables used to calculate the ballistic coefficient.
-    volume: number; // In m^3.
-    mass: number; // In kg.
-    diameter: number; // In km.
-    drag: number; // Drag coefficient of a sphere.
-    density: number; // Density of aluminum. kg/m^3
+  public specs: MMODSpecs;
 
-    // TODO: Make into an enum.
-    material: string;
-  };
+  public path: { x: number; y: number; z: number }[] | undefined;
 
   // TODO: Move to constants.
   // Constants
@@ -99,72 +103,97 @@ export class MMOD {
   /**
    * A small point object representing orbiting debris.
    */
-  constructor(scene?: THREE.Scene) {
+  constructor(args: {
+    scene?: THREE.Scene;
+    flight?: {
+      path: { x: number; y: number; z: number }[];
+      specs: MMODSpecs;
+      orbit: MMODOrbit;
+    };
+  }) {
     // TODO: test remove
     // if (COUNT === 0) {
     //   this.shouldLog = true;
     // }
     // COUNT++;
 
-    // Generate random position in low earth orbit
-    const altitude = Random.number(700, 2000); // altitude between 700-2000 km
-    const longitude = Random.number(0, 360); // random longitude
-    const latitude = Math.random() * 180 - 90; // random latitude
+    if (args.flight) {
+      this.orbit = args.flight.orbit;
+      this.specs = args.flight.specs;
+      this.position = {
+        x: args.flight.path[0].x,
+        y: args.flight.path[0].y,
+        z: args.flight.path[0].z,
+      };
+      this.path = args.flight.path;
+    } else {
+      // Generate random position in low earth orbit
+      const altitude = Random.number(700, 2000); // altitude between 700-2000 km
+      const longitude = Random.number(0, 360); // random longitude
+      const latitude = Math.random() * 180 - 90; // random latitude
 
-    // Convert spherical coordinates to Cartesian coordinates
-    const x =
-      (this.earthRadius + altitude) * Math.cos(latitude) * Math.cos(longitude);
-    const y =
-      (this.earthRadius + altitude) * Math.cos(latitude) * Math.sin(longitude);
-    const z = (this.earthRadius + altitude) * Math.sin(latitude);
+      // Convert spherical coordinates to Cartesian coordinates
+      const x =
+        (this.earthRadius + altitude) *
+        Math.cos(latitude) *
+        Math.cos(longitude);
+      const y =
+        (this.earthRadius + altitude) *
+        Math.cos(latitude) *
+        Math.sin(longitude);
+      const z = (this.earthRadius + altitude) * Math.sin(latitude);
 
-    this.position = { x, y, z };
+      this.position = { x, y, z };
 
-    // Generate random elliptical orbit path
-    this.orbit = {
-      semiMajorAxis: Random.number(700, 2000), // semi-major axis between 1300-2000 km
-      eccentricity: Random.number(0, 0.1),
+      // Generate random elliptical orbit path
+      this.orbit = {
+        semiMajorAxis: Random.number(700, 2000), // semi-major axis between 1300-2000 km
+        eccentricity: Random.number(0, 0.1),
 
-      // TODO: I think more common around 80-100..?
-      // Inclination between the plane of the orbit and the reference plane.
-      // 80-100 is a polar orbit.
-      inclination: Random.number(0, 100), // inclination between 0-180 degrees
+        // TODO: I think more common around 80-100..?
+        // Inclination between the plane of the orbit and the reference plane.
+        // 80-100 is a polar orbit.
+        inclination: Random.number(0, 100), // inclination between 0-180 degrees
 
-      // Longitude (☊).
-      longitudeAscendingNode: Random.number(0, 360),
-      // Periapsis (ω): the angle measured along the orbit from the ascending node to
-      // the periapsis.
-      argumentPeriapsis: Random.number(0, 360),
-      // the angle measured along the orbital path from the periapsis to the satellite's
-      // current position, measured at a specific reference time known as the epoch.
-      // It describes the satellite's position along its orbit at a particular point in time.
-      trueAnomalyAtEpoch: Random.number(0, 360),
-    };
+        // Longitude (☊).
+        longitudeAscendingNode: Random.number(0, 360),
+        // Periapsis (ω): the angle measured along the orbit from the ascending node to
+        // the periapsis.
+        argumentPeriapsis: Random.number(0, 360),
+        // the angle measured along the orbital path from the periapsis to the satellite's
+        // current position, measured at a specific reference time known as the epoch.
+        // It describes the satellite's position along its orbit at a particular point in time.
+        trueAnomalyAtEpoch: Random.number(0, 360),
+      };
 
-    // Other properties (random values for demonstration)
-    const material = "Metal";
-    const mass = Random.number(1.0, 300.0); // random value
-    const diameter = Random.number(0.1, 1); // random value
-    const drag = Random.number(1.0, 2.2); // random value
+      // Other properties (random values for demonstration)
+      const material = "Metal";
+      const mass = Random.number(1.0, 300.0); // random value
+      const diameter = Random.number(0.1, 1); // random value
+      const drag = Random.number(1.0, 2.2); // random value
 
-    const materialDensity = MATERIAL_DENSITY_MAP[material];
-    const density = Random.number(materialDensity - 100, materialDensity + 100); // random value
+      const materialDensity = MATERIAL_DENSITY_MAP[material];
+      const density = Random.number(
+        materialDensity - 100,
+        materialDensity + 100
+      ); // random value
 
-    // Using volume of a sphere for rough estimate.
-    const volume = (4 / 3) * Math.PI * Math.pow(diameter / 2, 3); // random value
+      // Using volume of a sphere for rough estimate.
+      const volume = (4 / 3) * Math.PI * Math.pow(diameter / 2, 3); // random value
 
-    // Derive ballistic coefficient using the density-based formula.
-    const ballisticCoefficient = 0.5 * density * diameter * drag;
+      // Derive ballistic coefficient using the density-based formula.
+      const ballisticCoefficient = 0.5 * density * diameter * drag;
 
-    this.specs = {
-      material,
-      mass,
-      diameter,
-      drag,
-      density,
-      volume,
-      ballisticCoefficient,
-    };
+      this.specs = {
+        material,
+        mass,
+        diameter,
+        drag,
+        density,
+        volume,
+        ballisticCoefficient,
+      };
+    }
 
     // Set mean motion at random.
     // Initial speed (scalar) should be anywhere from 6-9 km/s.
@@ -174,8 +203,8 @@ export class MMOD {
     // const dayDistanceTraveled = initialSpeed * 86400; // Seconds in a day.
     // this.motion = dayDistanceTraveled / circumference;
 
-    if (scene) {
-      this.initThreeJSMesh(scene);
+    if (args.scene) {
+      this.initThreeJSMesh(args.scene);
     }
   }
 
@@ -350,13 +379,47 @@ export class MMOD {
     }
   }
 
-  public stepMesh(newPos: { x: number; y: number; z: number }) {
+  public stepMesh(newPos?: { x: number; y: number; z: number }) {
     if (!this.mesh) {
       console.warn("`stepMesh` was called with no mesh instiantiated.");
       return;
     }
-    this.mesh.position.set(newPos.x, newPos.y, newPos.z);
+
+    if (newPos) {
+      this.mesh.position.set(newPos.x, newPos.y, newPos.z);
+    } else {
+      if (!this.path) {
+        throw new Error(
+          "stepMesh error: New position must be provided if no flight path given."
+        );
+      }
+    }
+
     this.mesh.updateMatrix();
+  }
+
+  private updatePositionFromFlightPath(
+    startTimestamp: number,
+    parity: number,
+    currentTime: number
+  ) {
+    if (!this.path) {
+      throw new Error(
+        "updatePositionFromFlightPath error: Cannot update if no flight path provided."
+      );
+    }
+    if (currentTime < startTimestamp) {
+      console.log("Current time must be after the start timestamp.");
+      return null;
+    }
+
+    // First, get the index
+    const index = Math.floor((currentTime - startTimestamp) / parity);
+
+    if (index < 0 || index >= this.path.length - 1) {
+      console.log("Current time is not between any two points' timestamps.");
+      return null;
+    }
   }
 
   public tle(timestamp: Date): TLE {
