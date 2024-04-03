@@ -15,7 +15,7 @@ export type LabeledPoint = {
 
 // The full dataset, composed of many subsets, will look like this.
 export type Dataset = {
-  [participant: string]: (Point | LabeledPoint)[];
+  [participant: string]: Point[];
 };
 
 export class Aggregator {
@@ -60,32 +60,36 @@ export class Aggregator {
     return labeledPoints;
   }
 
-  public aggregate(points: LabeledPoint[]): Point[] {
+  public aggregate(points: LabeledPoint[]): LabeledPoint[] {
     // Implement the aggregation formula to combine all points with the same label.
     const aggregatedPointsMap: Map<
       number,
-      [number, number, number, number, number]
-    > = new Map(); // label => [sumX, sumY, sumZ, sumC, count]
+      [number, number, number, number, number, number]
+    > = new Map(); // label => [sumX, sumY, sumZ, sumC, count, sumDist]
 
     // TODO: Might be simpler to just make the Map in `label` fn.
     for (const point of points) {
       const label = point.label;
       if (!aggregatedPointsMap.has(label)) {
-        aggregatedPointsMap.set(label, [0, 0, 0, 0, 0]);
+        aggregatedPointsMap.set(label, [0, 0, 0, 0, 0, 0]);
       }
-      const [sumX, sumY, sumZ, sumC, count] = aggregatedPointsMap.get(label)!;
+      const [sumX, sumY, sumZ, sumC, count, sumDist] =
+        aggregatedPointsMap.get(label)!;
       aggregatedPointsMap.set(label, [
         sumX + point.x,
         sumY + point.y,
         sumZ + point.z,
         // We square the confidence score to account for the weighting based on count.
         sumC + point.C ** 2 * count,
-        count + 1,
+        count + 1, // TODO: Why add 1
+        sumDist + point.deviation,
       ]);
     }
 
-    const aggregatedPoints: Point[] = [];
-    for (const [label, [sumX, sumY, sumZ, sumC, count]] of Array.from(
+    // TODO: I think deviation might already be avg'd??
+
+    const aggregatedPoints: LabeledPoint[] = [];
+    for (const [label, [sumX, sumY, sumZ, sumC, count, sumDist]] of Array.from(
       aggregatedPointsMap.entries()
     )) {
       const x = sumX / count;
@@ -97,7 +101,8 @@ export class Aggregator {
         count === 1
           ? 0.0
           : Math.max(0, Math.min(Math.sqrt(sumC) / (count * count), 1.0));
-      aggregatedPoints.push({ x, y, z, C });
+      const deviation = sumDist / count;
+      aggregatedPoints.push({ x, y, z, C, label, deviation });
     }
 
     return aggregatedPoints;
@@ -180,7 +185,7 @@ export class Aggregator {
             Math.random() * randomSubset.length
           );
           const randomPoint = randomSubset[randomPointIndex];
-          subset.push({ ...randomPoint, label: randomPoint.label });
+          subset.push(randomPoint);
         } else {
           // Generate a new point with a new label
           subset.push({

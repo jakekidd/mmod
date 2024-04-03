@@ -1,16 +1,34 @@
 import * as THREE from "three";
 import { LEO_RADIUS, MMOD_SCALE } from "../helpers/Constants";
+import { Random } from "../helpers/Random";
 
 export type TLE = [string, string];
+
+// TODO: Move these to constants.
+const MATERIAL_DENSITY_MAP: { [material: string]: number } = {
+  Metal: 7800, // Density of metal in kg/m^3
+  Plastic: 950, // Density of plastic in kg/m^3
+  Composite: 1600, // Density of composite in kg/m^3
+  // TODO: Add more materials as needed
+};
+/**
+ * The gravitational parameter (μ) is a constant value for a particular
+ * celestial body and represents the product of the gravitational constant (G) and the
+ * mass (M) of the central body (usually a planet or a star). For Earth, μ is approximately
+ * 3.986×10^14 m^3/s^2.
+ */
+const MU_EARTH = 3.986e14;
 
 export class MMOD {
   // The three js object to be rendered.
   public readonly mesh: THREE.Mesh;
 
+  position: { x: number; y: number; z: number };
+
   // TODO: Think on this one.
   // Normally, a sequential nine-digit number assigned by the
   // USSPACECOM in order of launch or discovery.
-  public satelliteCatalogNumber = 0;
+  public catalogNumber = 0;
 
   // Keplerian orbital elements, plus some others used in
   // producing the TLE representation.
@@ -47,16 +65,85 @@ export class MMOD {
   // Will leave this at unclassified for now.
   public classification: "U" | "C" | "S" = "U";
 
+  // TODO: Comment this
+  public orbit: {
+    semiMajorAxis: number;
+    eccentricity: number;
+    inclination: number;
+    longitudeAscendingNode: number;
+    argumentPeriapsis: number;
+    trueAnomalyAtEpoch: number;
+  };
+
+  public ballisticCoefficient: number;
+
   // Variables used to calculate the ballistic coefficient.
+  public volume: number; // In m^3.
   public mass: number; // In kg.
   public diameter: number; // In km.
   public drag = 0.47; // Drag coefficient of a sphere.
-  public density = 2700.0; // Density of aluminum.
+  public density = 2700.0; // Density of aluminum. kg/m^3
+
+  // TODO: Make into an enum.
+  material: string;
+
+  // TODO: Move to constants.
+  // Constants
+  earthRadius: number = 6371; // in km
 
   /**
    * A small point object representing orbiting debris.
    */
   constructor(scene: THREE.Scene) {
+    // Generate random position in low earth orbit
+    const altitude = Math.floor(Math.random() * 1300) + 700; // altitude between 700-2000 km
+    const longitude = Math.random() * 360; // random longitude
+    const latitude = Math.random() * 180 - 90; // random latitude
+
+    // Convert spherical coordinates to Cartesian coordinates
+    const x =
+      (this.earthRadius + altitude) * Math.cos(latitude) * Math.cos(longitude);
+    const y =
+      (this.earthRadius + altitude) * Math.cos(latitude) * Math.sin(longitude);
+    const z = (this.earthRadius + altitude) * Math.sin(latitude);
+
+    this.position = { x, y, z };
+
+    // Generate random elliptical orbit path
+    this.orbit = {
+      semiMajorAxis: Random.number(700, 2000), // semi-major axis between 1300-2000 km
+      eccentricity: Random.number(0, 0.5),
+
+      // TODO: I think more common around 80-100..?
+      // Inclination between the plane of the orbit and the reference plane.
+      // 80-100 is a polar orbit.
+      inclination: Random.number(0, 100), // inclination between 0-180 degrees
+
+      // Longitude (☊).
+      longitudeAscendingNode: Random.number(0, 360),
+      // Periapsis (ω): the angle measured along the orbit from the ascending node to
+      // the periapsis.
+      argumentPeriapsis: Random.number(0, 360),
+      // the angle measured along the orbital path from the periapsis to the satellite's
+      // current position, measured at a specific reference time known as the epoch.
+      // It describes the satellite's position along its orbit at a particular point in time.
+      trueAnomalyAtEpoch: Random.number(0, 360),
+    };
+
+    // Other properties (random values for demonstration)
+    this.material = "Metal";
+    this.mass = Random.number(1.0, 300.0); // random value
+    this.diameter = Random.number(0.1, 1); // random value
+    this.drag = Random.number(1.0, 2.2); // random value
+
+    const materialDensity = MATERIAL_DENSITY_MAP[this.material];
+    this.density = Random.number(materialDensity - 100, materialDensity + 100); // random value
+
+    this.volume = (4 / 3) * Math.PI * Math.pow(this.diameter / 2, 3); // random value
+
+    // Derive ballistic coefficient using the density-based formula.
+    this.ballisticCoefficient = 0.5 * this.density * this.diameter * this.drag;
+
     const geometry = new THREE.SphereGeometry(1, 1, 1);
     const material = new THREE.MeshPhongMaterial({
       color: new THREE.Color().setHSL(0.9, 0.9, 0.9, THREE.SRGBColorSpace),
@@ -70,8 +157,8 @@ export class MMOD {
     // spherical coordinates, theta and phi with 0 < theta < 2pi and
     // 0 < phi < pi.
     // Generate random values for theta and phi.
-    const theta = this.random(0.01, 2 * Math.PI);
-    const phi = Math.acos(this.random(-1, 1));
+    const theta = Random.number(0.01, 2 * Math.PI);
+    const phi = Math.acos(Random.number(-1, 1));
     // TODO: Vary the radius slightly.
     // Convert theta and phi into cartesian coordinates for the mesh.
     // The LEO radius will be varied slightly by a modifier, targeting
@@ -83,215 +170,300 @@ export class MMOD {
 
     // Set mean motion at random.
     // Initial speed (scalar) should be anywhere from 6-9 km/s.
-    const initialSpeed = this.random(6000, 9000); // In m/s.
+    const initialSpeed = Random.number(6000, 9000); // In m/s.
     // Convert this to approximate (non-elliptical) revolutions per day.
     const circumference = 46357.341; // 2pi * 7378 (mean LEO).
     const dayDistanceTraveled = initialSpeed * 86400; // Seconds in a day.
     this.motion = dayDistanceTraveled / circumference;
 
     // Set inclination at random.
-    this.inclination = this.random(40.0, 60.0);
+    this.inclination = Random.number(40.0, 60.0);
 
     // Set eccentricity at random.
-    this.eccentricity = this.random(0.0, 0.0009);
+    this.eccentricity = Random.number(0.0, 0.0009);
 
     // Set argument of perigee at random.
-    this.perigee = this.random(100.0, 150.0);
+    this.perigee = Random.number(100.0, 150.0);
 
     // Set mean anomaly at random.
-    this.anomaly = this.random(300.0, 350.0);
+    this.anomaly = Random.number(300.0, 350.0);
 
     // Set longitude at random.
-    this.longitude = this.random(200, 300);
+    this.longitude = Random.number(200, 300);
 
     // Set mass, diameter at random.
-    this.mass = this.random(0.01, 0.2);
-    this.diameter = this.random(0.0001, 0.0003);
+    this.mass = Random.number(0.01, 0.2);
+    this.diameter = Random.number(0.0001, 0.0003);
 
     scene.add(this.mesh);
   }
 
   /**
    * Proceed to the next animation frame. Reposition the
-   * @param t Time in seconds since init. It's assumed that we init at 0.
+   * @param timestamp Time in seconds since init. It's assumed that we init at 0.
    */
-  public step(t: number): void {}
+  public step(timestamp: number): void {
+    // Logic to calculate new position based on timestamp.
+    const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2.
+    const earthMass = 5.972e24; // Earth mass in kg.
+
+    // Convert timestamp to seconds.
+    const t = timestamp / 1000;
+
+    // Calculate mean anomaly (M) based on Kepler's equation.
+    const n = Math.sqrt(
+      (G * earthMass) / Math.pow(this.orbit.semiMajorAxis * 1000, 3)
+    ); // Mean motion.
+    let meanAnomaly = this.orbit.trueAnomalyAtEpoch - n * t;
+
+    // Iteratively solve Kepler's equation for eccentric anomaly (E).
+    let eccentricAnomaly = meanAnomaly; // Initial guess for eccentric anomaly.
+    let delta = 1;
+    const tolerance = 1e-10; // Tolerance for convergence.
+    while (Math.abs(delta) > tolerance) {
+      const f =
+        eccentricAnomaly -
+        this.orbit.eccentricity * Math.sin(eccentricAnomaly) -
+        meanAnomaly;
+      const fPrime = 1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly);
+      delta = f / fPrime;
+      eccentricAnomaly -= delta;
+    }
+
+    // Calculate true anomaly (ν) from eccentric anomaly (E).
+    const cosTrueAnomaly =
+      (Math.cos(eccentricAnomaly) - this.orbit.eccentricity) /
+      (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
+    const sinTrueAnomaly =
+      (Math.sqrt(1 - this.orbit.eccentricity * this.orbit.eccentricity) *
+        Math.sin(eccentricAnomaly)) /
+      (1 - this.orbit.eccentricity * Math.cos(eccentricAnomaly));
+    const trueAnomaly = Math.atan2(sinTrueAnomaly, cosTrueAnomaly);
+
+    // Calculate distance from center of the Earth to the satellite (r) using vis-viva equation.
+    const radius =
+      (this.orbit.semiMajorAxis *
+        1000 *
+        (1 - this.orbit.eccentricity * this.orbit.eccentricity)) /
+      (1 + this.orbit.eccentricity * Math.cos(trueAnomaly));
+
+    // Calculate position in orbital plane (x', y').
+    const xPrime = radius * Math.cos(trueAnomaly);
+    const yPrime = radius * Math.sin(trueAnomaly);
+
+    // Rotate position to align with orbital elements.
+    const cosLongitudeAscendingNode = Math.cos(
+      this.orbit.longitudeAscendingNode
+    );
+    const sinLongitudeAscendingNode = Math.sin(
+      this.orbit.longitudeAscendingNode
+    );
+    const cosArgumentPeriapsis = Math.cos(this.orbit.argumentPeriapsis);
+    const sinArgumentPeriapsis = Math.sin(this.orbit.argumentPeriapsis);
+    const cosInclination = Math.cos(this.orbit.inclination);
+    const sinInclination = Math.sin(this.orbit.inclination);
+
+    const x =
+      xPrime *
+        (cosLongitudeAscendingNode * cosArgumentPeriapsis -
+          sinLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination) -
+      yPrime *
+        (sinLongitudeAscendingNode * cosArgumentPeriapsis +
+          cosLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination);
+    const y =
+      xPrime *
+        (cosLongitudeAscendingNode * sinArgumentPeriapsis +
+          sinLongitudeAscendingNode * cosArgumentPeriapsis * cosInclination) +
+      yPrime *
+        (cosLongitudeAscendingNode * cosArgumentPeriapsis -
+          sinLongitudeAscendingNode * sinArgumentPeriapsis * cosInclination);
+    const z =
+      xPrime * (sinLongitudeAscendingNode * sinInclination) +
+      yPrime * (cosLongitudeAscendingNode * sinInclination);
+
+    // Update object position.
+    this.position = { x, y, z };
+
+    // Finally, convert to three.js coordinate space and update the mesh's
+    // position.
+    const threePosition = this.toThreeJSPosition();
+    this.mesh.position.x = threePosition.x;
+    this.mesh.position.y = threePosition.y;
+    this.mesh.position.z = threePosition.z;
+  }
 
   public tle(timestamp: Date): TLE {
-    const tle = [Array(69).fill("\xa0"), Array(69).fill("\xa0")];
-
-    /// LINE 1
-    // 1. Line number.
-    tle[0].splice(0, 1, "1");
-
-    // TODO: Check if this should be 0-padded.
-    // 2. Satellite catalog number. This is space junk, so probably zero.
-    tle[0].splice(2, 5, ...this.pad(this.satelliteCatalogNumber, 5).split(""));
-
-    // 3. Append classification.
-    tle[0].splice(7, 1, this.classification);
-
-    // 4. Append international designator, the launch year etc., not relevant.
-    tle[0].splice(9, 6, "0", "0", "0", "0", "0", "A");
-
-    // 5. Append epoch to the first line.
-    // Epoch year, the last two digits of year.
-    tle[0].splice(
-      18,
-      2,
-      ...timestamp.getFullYear().toString().slice(2, 4).split("")
-    );
-    // Epoch day of the year and fractional portion of the day.
-    const day = this.pad(this.getDayOfYear(timestamp), 3);
-    const fraction = this.getFractionalPortionOfDay(timestamp)
+    // Line 1
+    const firstDerivativeMeanMotion = this.getFirstDerivativeMeanMotion();
+    const secondDerivativeMeanMotion = this.getSecondDerivativeMeanMotion();
+    const BSTARDragTerm = this.getBSTARDragTerm();
+    const line1 = `1 ${this.catalogNumber}U 00000A ${timestamp
+      .toISOString()
+      .slice(2, 10)
+      .replace(/-/g, "")} .${firstDerivativeMeanMotion
       .toString()
-      .substring(1, 10); // Removes 0 from beginning and truncates.
-    tle[0].splice(20, 12, ...(day + fraction).split(""));
+      .replace(/-/g, " ")
+      .padStart(8, " ")}${
+      secondDerivativeMeanMotion > 0
+        ? secondDerivativeMeanMotion.toFixed(8).padStart(8, " ")
+        : "  .00000000"
+    }-${BSTARDragTerm.toFixed(4).replace(/-/g, " ").padStart(6, " ")} 0`;
 
-    // TODO: Should be first derivative of mean motion?
-    // 6. Append ballistic coefficient.
-    const ballisticCoefficient = this.getBallisticCoefficient();
-    tle[0].splice(
-      33,
-      10,
-      ballisticCoefficient < 0 ? "-" : "\xa0",
-      ...ballisticCoefficient.toString().substring(1, 10).split("")
-    );
-    // TODO: Append second derivative of mean motion.
-    // Leaving at 0 for now.
-    tle[0].splice(44, 8, "\xa0", "0", "0", "0", "0", "0", "-", "0");
+    // Line 2
+    const line2 = `2 ${this.catalogNumber} ${this.inclination
+      .toFixed(4)
+      .padStart(8, " ")}${this.orbit.longitudeAscendingNode
+      .toFixed(4)
+      .padStart(8, " ")}${(this.eccentricity * 1e7)
+      .toFixed(7)
+      .replace(/\.?0+$/, "")
+      .padStart(7, " ")}${this.orbit.argumentPeriapsis
+      .toFixed(4)
+      .padStart(8, " ")}${this.getMeanAnomaly(timestamp.getUTCMilliseconds())
+      .toFixed(4)
+      .padStart(8, " ")}${this.getMeanMotion(this.orbit.semiMajorAxis, MU_EARTH)
+      .toFixed(11)
+      .replace(".", "")}`;
 
-    // TODO: Am I doing this right?
-    // 7. Append BSTAR.
-    const BSTAR = this.getBSTAR();
-    let BSTARString = BSTAR.toString().substring(
-      BSTAR < 0 ? 3 : 2,
-      BSTAR < 0 ? 8 : 7
-    );
-    BSTARString = BSTARString.substring(0, 5) + "-" + BSTARString.substring(6);
-    tle[0].splice(53, 7, ..."59442-4".split("")); // BSTAR < 0 ? "-" : "\xa0", ...BSTARString.split(""));
-
-    // 8. Append ephemeris type. Supposedly always zero.
-    tle[0].splice(62, 1, "0");
-
-    // TODO: Is there any reason to actually track this?
-    // 9. Element set number, incremented when a new TLE is generated for this object. Will leave at 1.
-    tle[0].splice(64, 3, "001");
-
-    // TODO: How to do this? Encode first, or..?
-    // 10. Calculate and append the checksum.
-    tle[0].splice(68, 1, "0");
-
-    /// LINE 2
-    // 1. Line number.
-    tle[1].splice(0, 1, "2");
-
-    // 2. Again, satellite catalog number.
-    tle[1].splice(2, 5, ...this.pad(this.satelliteCatalogNumber, 5).split(""));
-
-    // 3. Append inclination.
-    tle[1].splice(
-      8,
-      6,
-      ...this.pad(this.inclination, 7, true).substring(0, 7).split("")
-    );
-
-    // 4. Append longitude.
-    tle[1].splice(
-      17,
-      8,
-      ...this.pad(this.longitude, 8, true).substring(0, 8).split("")
-    );
-
-    // 5. Append eccentricity.
-    tle[1].splice(
-      26,
-      7,
-      ...this.eccentricity.toString().substring(2, 10).split("")
-    );
-
-    // 6. Append argument of perigee.
-    tle[1].splice(
-      34,
-      8,
-      ...this.pad(this.perigee, 8, true).substring(0, 8).split("")
-    );
-
-    // 7. Append mean anomaly.
-    tle[1].splice(
-      43,
-      8,
-      ...this.pad(this.anomaly, 8, true).substring(0, 8).split("")
-    );
-
-    // 8. Append mean motion.
-    let extendedMotion = this.pad(
-      this.motion,
-      this.motion >= 10 ? 11 : 10,
-      true
-    );
-    if (this.motion <= 10) {
-      extendedMotion = this.pad(parseInt(extendedMotion), 11);
-    }
-    tle[1].splice(52, 11, ...extendedMotion.substring(0, 12).split(""));
-
-    // 9. Append revolution number.
-    tle[1].splice(63, 5, ...this.pad(this.revolution, 5).split(""));
-
-    // TODO: How to do this? Encode first, or..?
-    // 10. Calculate and append the checksum.
-    tle[1].splice(68, 1, "0");
-
-    return [tle[0].join(""), tle[1].join("")];
+    return [line1, line2];
   }
 
-  private getBSTAR(): number {
-    // TODO: Cross-sectional != frontal area.
-    // Should be expressed as spherical cap?
-    const B = (this.drag * this.getCrossSectionalArea()) / this.mass;
-    const BSTAR = (this.density * B) / 2;
-    console.log("BSTAR", BSTAR);
-    return BSTAR;
+  private getMeanMotion(a: number, mu: number): number {
+    // Semi-major axis 'a' in meters
+    // Gravitational parameter 'mu' in m^3/s^2
+
+    // Calculate mean motion (n)
+    const n = Math.sqrt(mu / Math.pow(a, 3));
+
+    // Convert mean motion to revolutions per day
+    const meanMotionRevPerDay = n * (86400 / (2 * Math.PI));
+
+    return meanMotionRevPerDay;
   }
 
-  // TODO: This is returning bad values.
-  private getBallisticCoefficient(): number {
-    return 0.00003075;
-    // return this.mass / (this.drag * this.getCrossSectionalArea());
+  private getFirstDerivativeMeanMotion(): number {
+    // Constants
+    const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2
+    const earthMass = 5.972e24; // Earth mass in kg
+
+    // Calculate the semi-major axis of the orbit in meters
+    const semiMajorAxisMeters = this.orbit.semiMajorAxis * 1000;
+
+    // Calculate the mean motion (n) in radians per second
+    const meanMotion = Math.sqrt(
+      (G * earthMass) / Math.pow(semiMajorAxisMeters, 3)
+    );
+
+    // Return the first derivative of mean motion
+    return (
+      -1.5 * meanMotion * this.orbit.eccentricity * this.orbit.eccentricity
+    );
   }
 
-  private getCrossSectionalArea(): number {
-    return Math.PI * (this.diameter / 2) ** 2;
+  // Function to calculate the second derivative of mean motion
+  private getSecondDerivativeMeanMotion(): number {
+    // Constants
+    const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2
+    const earthMass = 5.972e24; // Earth mass in kg
+
+    // Calculate the semi-major axis of the orbit in meters
+    const semiMajorAxisMeters = this.orbit.semiMajorAxis * 1000;
+
+    // Calculate the mean motion (n) in radians per second
+    const meanMotion = Math.sqrt(
+      (G * earthMass) / Math.pow(semiMajorAxisMeters, 3)
+    );
+
+    // Calculate the eccentricity squared
+    const eccentricitySquared =
+      this.orbit.eccentricity * this.orbit.eccentricity;
+
+    // Return the second derivative of mean motion
+    return (
+      (-meanMotion * eccentricitySquared * (4 * eccentricitySquared - 5)) /
+      semiMajorAxisMeters
+    );
   }
 
-  private getVolume(): number {
-    return (4 / 3) * Math.PI * Math.pow(this.diameter / 2, 3);
+  private getBSTARDragTerm(): number {
+    // Constants
+    // TODO: Move to constants!
+    const earthRadius = 6371; // Earth radius in kilometers
+    const earthMass = 5.972e24; // Earth mass in kg
+    const dragCoefficient = 2.2; // Example drag coefficient
+
+    // Calculate the cross-sectional area of the object
+    const crossSectionalArea = Math.PI * Math.pow(this.diameter / 2, 2); // Assuming spherical object
+
+    // Calculate the ballistic coefficient
+    const ballisticCoefficient =
+      dragCoefficient * (crossSectionalArea / this.mass);
+
+    // Calculate the atmospheric density at the object's altitude
+    const altitudeFromEarthCenter = this.getPositionMagnitude() - earthRadius;
+    const altitudeFromSurface = altitudeFromEarthCenter - this.earthRadius;
+    const density = this.getAtmosphericDensity(altitudeFromSurface); // Example call to get atmospheric density
+
+    // Calculate the BSTAR drag term
+    return -0.5 * ballisticCoefficient * density;
   }
 
-  private getFractionalPortionOfDay(date: Date): number {
-    const beginningOfDay = new Date(date);
-    beginningOfDay.setUTCHours(0, 0, 0, 0);
-    const msElapsed =
-      date.getUTCMilliseconds() - beginningOfDay.getUTCMilliseconds();
-    return msElapsed / 8.64e7;
+  private getMeanAnomaly(timestamp: number): number {
+    // Constants
+    const G = 6.6743e-11; // Gravitational constant in m^3/kg/s^2
+    const earthMass = 5.972e24; // Earth mass in kg
+
+    // Convert timestamp to seconds
+    const t = timestamp / 1000;
+
+    // Calculate mean motion (n) in radians per second
+    const semiMajorAxisMeters = this.orbit.semiMajorAxis * 1000;
+    const n = Math.sqrt((G * earthMass) / Math.pow(semiMajorAxisMeters, 3));
+
+    // Calculate mean anomaly (M) based on Kepler's equation
+    const M = this.orbit.trueAnomalyAtEpoch - n * t;
+
+    return M;
   }
 
-  private getDayOfYear(date: Date): number {
-    const beginningOfYear = new Date();
-    beginningOfYear.setUTCHours(0, 0, 0, 0);
-    beginningOfYear.setUTCDate(0);
-    beginningOfYear.setUTCMonth(0);
-
-    const secondsIntoYear =
-      date.getUTCSeconds() - beginningOfYear.getUTCSeconds();
-    return Math.floor(secondsIntoYear / 86400);
+  private getPositionMagnitude(): number {
+    return Math.sqrt(
+      this.position.x * this.position.x +
+        this.position.y * this.position.y +
+        this.position.z * this.position.z
+    );
   }
 
-  private pad(num: number, size: number, reverse: boolean = false): string {
-    let s = num.toString();
-    while (s.length < size) {
-      s = reverse ? s + "0" : "0" + s;
-    }
-    return s;
+  // Function to estimate atmospheric density at a given altitude
+  private getAtmosphericDensity(altitude: number): number {
+    // Constants for US Standard Atmosphere model.
+    // NOTE: This is just for the troposphere (up to 11k km).
+    const T0 = 288.15; // Sea level temperature in Kelvin
+    const lapseRate = 0.0065; // Temperature lapse rate in Kelvin per meter
+    const R = 8.31447; // Universal gas constant in J/(mol*K)
+    const g0 = 9.80665; // Standard gravity in m/s^2
+    const M = 0.0289644; // Molar mass of dry air in kg/mol
+
+    // Calculate temperature at given altitude using lapse rate model.
+    const temperature = T0 - lapseRate * altitude;
+
+    // Calculate pressure at given altitude using hydrostatic equation.
+    const pressure =
+      101325 *
+      Math.pow(1 - (lapseRate * altitude) / T0, (g0 * M) / (R * lapseRate));
+
+    // Calculate density using ideal gas law.
+    return (pressure * M) / (R * temperature);
+  }
+
+  // Function to convert position to three.js coordinates
+  private toThreeJSPosition(): { x: number; y: number; z: number } {
+    // Scaling down the position to fit with three.js coordinates (assuming earth sphere radius is 16)
+    const scaleFactor = 16 / 6371; // TODO: Should be constants!
+    return {
+      x: this.position.x * scaleFactor,
+      y: this.position.y * scaleFactor,
+      z: this.position.z * scaleFactor,
+    };
   }
 }
