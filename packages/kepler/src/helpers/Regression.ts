@@ -1,3 +1,4 @@
+// TODO: Maybe put in sep. types file, should inherit a cardinal coords type...
 interface DataPoint {
   x: number;
   y: number;

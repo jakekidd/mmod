@@ -23,7 +23,7 @@ let COUNT = 0;
 
 export class MMOD {
   // The three js object to be rendered.
-  public readonly mesh: THREE.Mesh;
+  public mesh: THREE.Mesh | undefined;
 
   position: { x: number; y: number; z: number };
 
@@ -98,7 +98,7 @@ export class MMOD {
   /**
    * A small point object representing orbiting debris.
    */
-  constructor(scene: THREE.Scene) {
+  constructor(scene?: THREE.Scene) {
     // TODO: test remove
     // if (COUNT === 0) {
     //   this.shouldLog = true;
@@ -154,31 +154,6 @@ export class MMOD {
     // Derive ballistic coefficient using the density-based formula.
     this.ballisticCoefficient = 0.5 * this.density * this.diameter * this.drag;
 
-    const geometry = new THREE.SphereGeometry(5, 4, 4);
-    const material = new THREE.MeshPhongMaterial({
-      color: new THREE.Color().setHSL(0.9, 0.9, 0.9, THREE.SRGBColorSpace),
-      side: THREE.DoubleSide,
-      alphaToCoverage: true,
-    });
-    this.mesh = new THREE.Mesh(geometry, material);
-
-    // Determine the initial position of the MMOD at random.
-    // Points on the surface of a sphere can be expressed using two
-    // spherical coordinates, theta and phi with 0 < theta < 2pi and
-    // 0 < phi < pi.
-    // Generate random values for theta and phi.
-    // const theta = Random.number(0.01, 2 * Math.PI);
-    // const phi = Math.acos(Random.number(-1, 1));
-    // TODO: Vary the radius slightly.
-    // Convert theta and phi into cartesian coordinates for the mesh.
-    // The LEO radius will be varied slightly by a modifier, targeting
-    // anywhere from 1000 km to 2000 km above the surface of the earth.
-    const threePosition = this.toThreeJSPosition();
-    this.mesh.position.x = threePosition.x; //LEO_RADIUS * Math.cos(theta) * Math.sin(phi);
-    this.mesh.position.y = threePosition.y; //LEO_RADIUS * Math.sin(theta) * Math.sin(phi);
-    this.mesh.position.z = threePosition.z; //LEO_RADIUS * Math.cos(phi);
-    this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = MMOD_SCALE;
-
     // Set mean motion at random.
     // Initial speed (scalar) should be anywhere from 6-9 km/s.
     // const initialSpeed = Random.number(6000, 9000); // In m/s.
@@ -187,7 +162,9 @@ export class MMOD {
     // const dayDistanceTraveled = initialSpeed * 86400; // Seconds in a day.
     // this.motion = dayDistanceTraveled / circumference;
 
-    scene.add(this.mesh);
+    if (scene) {
+      this.initThreeJSMesh(scene);
+    }
   }
 
   /**
@@ -333,30 +310,40 @@ export class MMOD {
     // Update object position.
     this.position = { x, y, z };
 
-    // Finally, convert to three.js coordinate space and update the mesh's
-    // position.
-    const threePosition = this.toThreeJSPosition();
+    if (this.mesh) {
+      // Finally, convert to three.js coordinate space and update the mesh's
+      // position.
+      const threePosition = this.toThreeJSPosition();
 
-    if (this.shouldLog) {
-      console.log(
-        "New position for mmod:",
-        this.position.x,
-        this.position.y,
-        this.position.z,
-        threePosition.x,
-        threePosition.y,
-        threePosition.z
-      );
-    }
+      if (this.shouldLog) {
+        console.log(
+          "New position for mmod:",
+          this.position.x,
+          this.position.y,
+          this.position.z,
+          threePosition.x,
+          threePosition.y,
+          threePosition.z
+        );
+      }
 
-    if (shouldMove) {
-      this.mesh.position.set(threePosition.x, threePosition.y, threePosition.z);
-      this.mesh.updateMatrix();
+      if (shouldMove) {
+        this.mesh.position.set(
+          threePosition.x,
+          threePosition.y,
+          threePosition.z
+        );
+        this.mesh.updateMatrix();
+      }
     }
   }
 
-  public stepMesh(newX: number, newY: number, newZ: number) {
-    this.mesh.position.set(newX, newY, newZ);
+  public stepMesh(newPos: { x: number; y: number; z: number }) {
+    if (!this.mesh) {
+      console.warn("`stepMesh` was called with no mesh instiantiated.");
+      return;
+    }
+    this.mesh.position.set(newPos.x, newPos.y, newPos.z);
     this.mesh.updateMatrix();
   }
 
@@ -405,6 +392,40 @@ export class MMOD {
       y: this.position.y * scaleFactor,
       z: this.position.z * scaleFactor,
     };
+  }
+
+  public initThreeJSMesh(scene: THREE.Scene) {
+    if (this.mesh) {
+      console.warn("Mesh already exists for object. Reinitializing.");
+      // TODO: Remove the previous mesh from the scene (assuming it's in this scene).
+    }
+
+    const geometry = new THREE.SphereGeometry(5, 4, 4);
+    const material = new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(0.9, 0.9, 0.9, THREE.SRGBColorSpace),
+      side: THREE.DoubleSide,
+      alphaToCoverage: true,
+    });
+    this.mesh = new THREE.Mesh(geometry, material);
+
+    scene.add(this.mesh);
+
+    // Determine the initial position of the MMOD at random.
+    // Points on the surface of a sphere can be expressed using two
+    // spherical coordinates, theta and phi with 0 < theta < 2pi and
+    // 0 < phi < pi.
+    // Generate random values for theta and phi.
+    // const theta = Random.number(0.01, 2 * Math.PI);
+    // const phi = Math.acos(Random.number(-1, 1));
+    // TODO: Vary the radius slightly.
+    // Convert theta and phi into cartesian coordinates for the mesh.
+    // The LEO radius will be varied slightly by a modifier, targeting
+    // anywhere from 1000 km to 2000 km above the surface of the earth.
+    const threePosition = this.toThreeJSPosition();
+    this.mesh.position.x = threePosition.x; //LEO_RADIUS * Math.cos(theta) * Math.sin(phi);
+    this.mesh.position.y = threePosition.y; //LEO_RADIUS * Math.sin(theta) * Math.sin(phi);
+    this.mesh.position.z = threePosition.z; //LEO_RADIUS * Math.cos(phi);
+    this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = MMOD_SCALE;
   }
 
   private getMeanMotion(a: number, mu: number): number {
