@@ -1,14 +1,15 @@
 import React, { useEffect } from "react";
 import "./Kepler.css";
-import fs from "fs";
-import * as path from "path";
 import * as THREE from "three";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { MMOD } from "./scene/MMOD";
 import { EARTH_RADIUS } from "./helpers/Constants";
 import { Identifier } from "./scene/Identifier";
-import { Aggregator } from "./model/Aggregator";
+// import { Aggregator } from "./model/Aggregator";
+
+// An alternative filesystem replacement to be used for importing flight path data.
+const { fs } = require("filer");
 
 const GUI_PARAMS = {
   showHelpers: true,
@@ -17,42 +18,94 @@ const GUI_PARAMS = {
 
 // TODO: Make this a GUI variable ??
 // Seconds that will elapse in sim time per animation frame.
-const FRAMERATE = 500;
+const FRAMERATE = 5000;
 const SECONDS_PER_FRAME = 10;
+const MAX_MMODS = 100;
+
+// TODO: Move to state?
+// Main components of the three.js nested web GL process.
+let renderer: THREE.WebGLRenderer;
+let scene: THREE.Scene;
+let camera: THREE.PerspectiveCamera;
+// Current sim time in UTC seconds. Used in the event we want to speed things up.
+let time: number;
+// Whether or not the three.js canvas renderer and scene have been initialized.
+// Note that we do not use state here, as we just want to prevent redundant init
+// calls in useEffect.
+let initialized = false;
+
+const mmods: MMOD[] = [];
+// Alice is an Identifier agent observing MMODs.
+// let alice: Identifier;
 
 function Kepler() {
-  // TODO: Move to state?
 
-  // Main components of the three.js nested web GL process.
-  let renderer: THREE.WebGLRenderer;
-  let scene: THREE.Scene;
-  let camera: THREE.PerspectiveCamera;
-  // Current sim time in UTC seconds. Used in the event we want to speed things up.
-  let time: number;
-  // Whether or not the three.js canvas renderer and scene have been initialized.
-  // Note that we do not use state here, as we just want to prevent redundant init
-  // calls in useEffect.
-  let initialized = false;
-
-  const mmods: MMOD[] = [];
-  // Alice is an Identifier agent observing MMODs.
-  let alice: Identifier;
-
-  useEffect(init, []);
+  useEffect(() => {
+    // Workaround to get async going.
+    const doInit = async () => {
+      await init();
+    }
+    doInit();
+  }, [animate, onWindowResize]);
 
   // Gather all the flight path filepaths.
-  function collectFlightPaths(directory: string): string[] {
-    if (fs.existsSync(directory)) {
-      const files = fs.readdirSync(directory);
-      const jsonFiles = files.filter((file) => path.extname(file) === ".json");
-      const jsonFilePaths = jsonFiles.map((file) => path.join(directory, file));
-      return jsonFilePaths;
-    } else {
-      console.error(
-        "collectFlightPaths error: No flight paths found in ./artifacts/orbits."
-      );
+  async function collectFlightPaths(directory: string): Promise<string[]> {
+    let jsonFilePaths: string[] = [];
+    // let dirExists = false;
+
+    try {
+      const response = await fetch(directory);
+      if (!response.ok) {
+        throw new Error('Failed to fetch directory contents');
+      }
+      console.log(`[Kepler.collectFlightPaths] Searching for flight paths in directory: ${directory}...`);
+      console.log("Response", response);
+      const files = await response.json();
+      console.log("Found files", files);
+  
+      // Filter JSON files
+      const jsonFiles = files.filter((file: string) => file.endsWith('.json'));
+  
+      // Import JSON files
+      const jsonData = await Promise.all(jsonFiles.map(async (file: string) => {
+        const fileResponse = await fetch(`${directory}/${file}`);
+        if (!fileResponse.ok) {
+          throw new Error(`Failed to fetch file ${file}`);
+        }
+        return await fileResponse.json();
+      }));
+  
+      return jsonData;
+    } catch (error) {
+      console.error('Error reading directory:', error);
       return [];
     }
+
+    // fs.exists(directory, (exists: boolean) => dirExists = exists)
+    // if (dirExists) {
+    //   fs.readdir(directory, (err: any, files: string[]) => {
+    //     if (err) {
+    //       console.error(
+    //         `[Kepler.collectFlightPaths] Error: Could not perform fs.readdir on directory ${directory}.`
+    //       );
+    //       return;
+    //     }
+    //     console.log(`[Kepler.collectFlightPaths] Searching for flight paths in directory: ${directory}...`);
+    //     const jsonFiles = files.filter((file) => file.includes(".json"));
+    //     if (jsonFiles.length === 0) {
+    //       console.error(
+    //         `[Kepler.collectFlightPaths] Error: No flight paths found in ${directory}.`
+    //       );
+    //       return;
+    //     }
+    //     jsonFilePaths = jsonFiles.map((file) => directory + file);
+    //   });
+    // } else {
+    //   console.error(
+    //     `[Kepler.collectFlightPaths] Error: Directory ${directory} not found.`
+    //   );
+    // }
+    return jsonFilePaths;
   }
 
   // useEffect(tleTest, []);
@@ -83,7 +136,7 @@ function Kepler() {
     // console.log(position.height); // in km
   }
 
-  function init(): void {
+  async function init(): Promise<void> {
     // Check whether initialized.
     if (initialized) {
       return;
@@ -143,8 +196,16 @@ function Kepler() {
 
     // Init the MMOD meshes, small object points that will be orbiting the
     // earth sphere.
-    const files = collectFlightPaths("./artifacts/orbits");
-    for (let i = 0; i < files.length; i++) {
+    // TODO: Fix this!
+    // const directory = `${JAKE_ABS_PATH}/artifacts/orbits`
+    const directory = "/artifacts/orbits";
+    const files = await collectFlightPaths(directory);
+    if (files.length === 0) {
+      console.warn("No MMOD flight paths found. Please generate using `yarn run precalc`.")
+    } else {
+      console.log(`Acquired ${files.length} files of flight path data.`)
+    }
+    for (let i = 0; i < Math.min(files.length, MAX_MMODS); i++) {
       const data = fs.readFileSync(files[i]).toString();
       const flight = JSON.parse(data);
       const mmod = new MMOD({ scene, flight });
@@ -169,8 +230,10 @@ function Kepler() {
     // Add a window event listener that will fire when the browser window is resized.
     window.addEventListener("resize", onWindowResize);
 
-    // Start the animation process.
-    animate();
+    // Start the animation process, if there are MMODs to animate.
+    if (mmods.length > 0) {
+      animate();
+    }
 
     // TODO: REMOVE
     // const date = new Date();

@@ -1,7 +1,7 @@
 import { EARTH_RADIUS, LEO_RADIUS, MMOD_SCALE } from "./Constants";
 import { Random } from "./Random";
 import { linearRegressionOrbit } from "./Regression";
-import { calculatePositionOverTimeAndAppend } from "./PathGenerator";
+import { calculatePositionOverTimeAndSave } from "./PathGenerator";
 
 export {
   EARTH_RADIUS,
@@ -9,5 +9,5 @@ export {
   MMOD_SCALE,
   Random,
   linearRegressionOrbit,
-  calculatePositionOverTimeAndAppend,
+  calculatePositionOverTimeAndSave,
 };

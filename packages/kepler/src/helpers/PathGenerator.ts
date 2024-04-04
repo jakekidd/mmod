@@ -1,3 +1,5 @@
+// NOTE: This file's utility method(s) are not intended for the browser,
+// thus we use fs here.
 import fs from "fs";
 import crypto from "crypto";
 import { MMOD } from "../scene/MMOD";

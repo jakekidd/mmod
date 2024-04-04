@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -19,6 +19,12 @@
   },
   "include": ["src", "src/*.ts", "src/**/*.ts"],
   "paths": {
-    "*": ["src/*"]
-  }
+    "*": ["src/*"],
+    "@kepler": ["src"]
+  },
+  "baseUrl": "src",
+// "paths": {
+//     "@modules/*": ["rest/modules/*"],
+//     "@services/*": ["services/*"]
+// }
 }
